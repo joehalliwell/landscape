@@ -62,9 +62,7 @@ def noise_2d(x: float, z: float, seed: int = 0) -> float:
     c01 = hash_coord(x0, z1)
     c11 = hash_coord(x1, z1)
 
-    return (c00 * (1 - tx) + c10 * tx) * (1 - tz) + (
-        c01 * (1 - tx) + c11 * tx
-    ) * tz
+    return (c00 * (1 - tx) + c10 * tx) * (1 - tz) + (c01 * (1 - tx) + c11 * tx) * tz
 
 
 def fractal_noise_2d(
@@ -82,9 +80,7 @@ def fractal_noise_2d(
     max_value = 0.0
 
     for i in range(octaves):
-        total += (
-            noise_2d(x * frequency, z * frequency, seed + i * 1000) * amplitude
-        )
+        total += noise_2d(x * frequency, z * frequency, seed + i * 1000) * amplitude
         max_value += amplitude
         amplitude *= persistence
         frequency *= 2

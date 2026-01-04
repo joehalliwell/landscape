@@ -17,13 +17,11 @@ DEFAULT_HEIGHT = max(8, TERM_SIZE.lines - 10)  # Leave room for prompt/status
 class RenderParams:
     width: Annotated[
         int,
-        Parameter(
-            help="Display width in character cells; defaults to full width."
-        ),
+        Parameter(help="Display width in character cells; defaults to full width."),
     ] = DEFAULT_WIDTH
-    height: Annotated[
-        int, Parameter(help="Display height in character cells")
-    ] = DEFAULT_HEIGHT
+    height: Annotated[int, Parameter(help="Display height in character cells")] = (
+        DEFAULT_HEIGHT
+    )
     sperical: float = 0.1
     elevation: float = 0.5  # TODO: 0 = head on, 1 = plan view
     horizon: float = 0.5
@@ -34,9 +32,7 @@ def rgb_to_ansi(r: int, g: int, b: int) -> str:
     return f"\033[38;2;{r};{g};{b}m"
 
 
-def rgb_to_ansi_fg_bg(
-    fg: tuple[int, int, int], bg: tuple[int, int, int]
-) -> str:
+def rgb_to_ansi_fg_bg(fg: tuple[int, int, int], bg: tuple[int, int, int]) -> str:
     """Convert RGB to 24-bit ANSI foreground and background color codes."""
     return f"\033[38;2;{fg[0]};{fg[1]};{fg[2]};48;2;{bg[0]};{bg[1]};{bg[2]}m"
 
@@ -89,12 +85,8 @@ def render_with_depth(
 
             if z > depth:
                 # Sky
-                bg = lerp_color(
-                    rgb("#aabbff"), rgb("#003a8c"), y / screen_height
-                )
-                fg = lerp_color(
-                    rgb("#aabbff"), rgb("#8899ff"), y / screen_height
-                )
+                bg = lerp_color(rgb("#aabbff"), rgb("#003a8c"), y / screen_height)
+                fg = lerp_color(rgb("#aabbff"), rgb("#8899ff"), y / screen_height)
                 lines[y][x] = (" ", fg, bg)
                 continue
             # Terrain - check for edges
@@ -207,9 +199,7 @@ def make_depth_buffer(render_params: RenderParams, height_map, *, horizon=0.5):
             # Basic oblique projection
             proj_offset = z * oblique
             # Drop the edges to hint at a sphere
-            proj_offset *= (
-                1.0 - spherical * ((x - width / 2) / (width / 2)) ** 2
-            )
+            proj_offset *= 1.0 - spherical * ((x - width / 2) / (width / 2)) ** 2
 
             terrain_height = int(
                 height_map[x][z] * max_height * proj_scale + proj_offset

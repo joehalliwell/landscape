@@ -58,9 +58,7 @@ class Biome:
     tree_density: float = 0.0  # Tree coverage (0-1)
 
     # Texture cponfig
-    color_map: Colormap = field(
-        default_factory=lambda: cmap("#000000", "#ffffff")
-    )
+    color_map: Colormap = field(default_factory=lambda: cmap("#000000", "#ffffff"))
 
     # Single character details to add
     details: list[Detail] = field(default_factory=list)
@@ -83,9 +81,7 @@ class Biome:
         c = " "
         for i, detail in enumerate(self.details):
             if (
-                noise_2d(
-                    x * 4 * detail.frequency, z * detail.frequency, seed * i
-                )
+                noise_2d(x * 4 * detail.frequency, z * detail.frequency, seed * i)
                 <= detail.density
             ):
                 c = rand_choice(detail.chars, x, z, seed)

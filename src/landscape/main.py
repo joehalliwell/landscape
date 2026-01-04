@@ -120,9 +120,7 @@ def main(
     seed: Annotated[
         int | None, Parameter(help="Random seed.", show_default=False)
     ] = None,
-    clear: Annotated[
-        bool, Parameter(help="Clear console before displaying.")
-    ] = True,
+    clear: Annotated[bool, Parameter(help="Clear console before displaying.")] = True,
 ):
     if seed is None:
         seed = random.randint(0, 100000)

@@ -45,9 +45,7 @@ def generate_biome_map(
         row: list[tuple[Biome, Biome, float]] = []
         for z in range(depth):
             # Get noise values for all biomes at this point
-            values = [
-                (biome_noise[i][x][z], biomes[i]) for i in range(len(biomes))
-            ]
+            values = [(biome_noise[i][x][z], biomes[i]) for i in range(len(biomes))]
             values.sort(key=lambda v: v[0], reverse=True)
 
             # Top two biomes
