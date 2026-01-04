@@ -16,3 +16,10 @@ landscape = "landscape.main:app"
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-coverage>=0.0",
+    "ruff>=0.14.10",
+]
