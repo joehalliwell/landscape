@@ -124,10 +124,8 @@ def render_with_depth(
         for x in range(width):
             z = depth_buffer[y][x]
             has_tree = tree_map[x][z] if z <= depth else False
-            above = min(screen_height - 1, y + 1)
             if has_tree and lines[y][x][0] == " ":
                 current = lines[y][x]
-                current_above = lines[above][x]
                 char = random.choice(TREE_CHARS)
                 char2 = random.choice(TREE_CHARS)
                 t = z / depth  # 0 = near, 1 = far
@@ -149,15 +147,17 @@ def render_with_depth(
                 )
 
                 lines[y][x] = (char2, lerp_color(fg, current[2], 0.6), bg)
-                if depth_buffer[y][z] >= depth:
-                    fg = lerp_color(fg, current_above[2], 0.1)
-                    if atmosphere.filter:
-                        fg = atmosphere.filter(x, z, y, fg)
-                    lines[above][x] = (
-                        char,
-                        fg,
-                        current_above[2],
-                    )
+                # above = min(screen_height - 1, y + 1)
+                # current_above = lines[above][x]
+                # if depth_buffer[y][z] >= depth:
+                #     fg = lerp_color(fg, current_above[2], 0.1)
+                #     if atmosphere.filter:
+                #         fg = atmosphere.filter(x, z, y, fg)
+                #     lines[above][x] = (
+                #         char,
+                #         fg,
+                #         current_above[2],
+                #     )
 
     # Add haze and filter
     for y in range(screen_height):

@@ -26,6 +26,14 @@ def clamp(v, lo, hi):
     return v
 
 
+def clamp_col(color):
+    return (
+        int(clamp(color[0], 0, 255)),
+        int(clamp(color[1], 0, 255)),
+        int(clamp(color[2], 0, 255)),
+    )
+
+
 def rand(seed: int) -> float:
     n: int = seed * 374761393
     n = (n ^ (n >> 13)) * 1274126177
