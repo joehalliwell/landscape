@@ -191,7 +191,7 @@ BIOMES = {
     ),
     "ice": Biome(
         name="Ice",
-        color_map=cmap("#8aa3f1", "#f0faff"),
+        color_map=cmap("#b3c3f4", "#f0faff"),
         roughness=0.4,
         height_scale=0.3,
         base_height=0.3,
