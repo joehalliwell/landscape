@@ -43,12 +43,12 @@ ATMOSPHERES = {
             ),
         ),
         Atmosphere(
-            name="Golden dawn",
+            name="Apricot dawn",
             color_map=cmap(
                 "#ecb8ec",
                 "#F6FF8F",
-                "#1C5768",
-                "#083563",
+                "#99CCDA",
+                "#77AEBD",
             ),
             details=[
                 Detail(
