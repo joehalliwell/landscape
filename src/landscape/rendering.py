@@ -87,7 +87,12 @@ def render_with_depth(
         cell1 = biome1.texture(nx, nz, ny, seed)
         cell2 = biome2.texture(nx, nz, ny, seed)
 
-        #  Recompute blend based on height
+        # Base details on dominant biome prior to recalculating
+        # the blend
+        dominant = cell1 if blend < 0.5 else cell2
+
+        # Recompute blend based on height This prevents e.g., the blue of the
+        # ocean being dragged up too high into mountains
         if biome1.base_height > biome2.base_height:
             blend = lerp(
                 1.0
@@ -109,7 +114,6 @@ def render_with_depth(
             )
 
         bg = lerp_color(cell1[2], cell2[2], blend)
-        dominant = cell1 if blend < 0.5 else cell2
         return (dominant[0], dominant[1], bg)
 
     # Convert to rows with color and edge detection

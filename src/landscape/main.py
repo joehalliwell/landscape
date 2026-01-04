@@ -25,55 +25,59 @@ app = App(help="Generated landscapes for the terminal.")
 
 # Predefined multi-biome combinations (near -> far)
 PRESETS = {
-    "coastal": ["ocean", "plains", "forest"],
+    "coastal": ["ocean", "plains", "forest", "plains"],
     "mountain_valley": ["plains", "forest", "mountains"],
     "alpine_lake": ["ocean", "alpine", "mountains"],
     "tropical": ["ocean", "jungle", "forest"],
-    "arctic": ["ocean", "ice"],
+    "arctic": ["ocean", "ice", "ocean", "ice"],
     "desert_oasis": ["desert", "mountains"],
     "fjord": ["ocean", "mountains"],
     "highlands": ["plains", "alpine", "mountains"],
     "tropical_island": ["ocean", "jungle", "ocean"],
 }
 
+COMPLEMENTS = {
+    "ocean": ["plains", "forest"],
+    "forest": ["plains", "mountains"],
+    "mountains": ["alpine", "forest"],
+    "jungle": ["ocean", "plains"],
+    "ice": ["ocean", "mountains"],
+    "plains": ["forest", "mountains"],
+    "desert": ["plains", "mountains"],
+    "alpine": ["mountains", "forest"],
+}
 
-def _get_biomes(biome_names: list[str], seed) -> list[Biome]:
-    biome_names = [name.lower() for name in biome_names]
-    for name in biome_names:
-        if name not in BIOMES:
-            print(f"Available: {', '.join(BIOMES.keys())}")
-            raise ValueError(f"Unknown biome: {name}")
+
+def _fuzzy_match(input: str, options: list[str], seed: int) -> str:
+    input = slugify(input)
+    matching = [option for option in options if input in option]
+    if len(matching) == 0:
+        raise ValueError(
+            f"Could not find option matching '{input}' in: {', '.join(options)}"
+        )
+    return rand_choice(matching, seed)
+
+
+def _get_biomes(biome_names: list[str], seed: int) -> list[Biome]:
+    biome_names = [_fuzzy_match(name, list(BIOMES), seed) for name in biome_names]
 
     if len(biome_names) == 1:
         # Single biome specified - pair with a complementary one
-        complements = {
-            "ocean": ["plains", "forest"],
-            "forest": ["plains", "mountains"],
-            "mountains": ["alpine", "forest"],
-            "jungle": ["ocean", "plains"],
-            "ice": ["ocean", "mountains"],
-            "plains": ["forest", "mountains"],
-            "desert": ["plains", "mountains"],
-            "alpine": ["mountains", "forest"],
-        }
-        partner = rand_choice(
-            complements.get(biome_names[0], list(BIOMES.keys())), seed
-        )
+        partner = rand_choice(COMPLEMENTS[biome_names[0]], seed)
         biome_names += [partner]
 
     biomes = [BIOMES[name] for name in biome_names]
-    assert len(biomes) > 1
     return biomes
 
 
-def _get_atmosphere(atmosphere_name, seed):
+def _get_atmosphere(atmosphere_name: str, seed: int):
     if atmosphere_name is None:
         atmosphere_name = rand_choice(list(ATMOSPHERES), seed)
-    return ATMOSPHERES[slugify(atmosphere_name)]
+    return ATMOSPHERES[_fuzzy_match(atmosphere_name, list(ATMOSPHERES), seed)]
 
 
-def _get_preset(preset_name: str, seed):
-    biomes = PRESETS[preset_name]
+def _get_preset(preset_name: str, seed: int):
+    biomes = PRESETS[_fuzzy_match(preset_name, list(PRESETS), seed)]
     atmospheres = list(ATMOSPHERES)
     atmosphere = rand_choice(atmospheres, seed)
     return biomes, atmosphere
@@ -100,7 +104,8 @@ def main(
     preset_name: Annotated[
         str | None,
         Parameter(
-            name="preset", help=f"Specify preset. Options: {', '.join(PRESETS)}."
+            name=["--preset", "-p"],
+            help=f"Specify preset. Options: {', '.join(PRESETS)}.",
         ),
     ] = None,
     seed: Annotated[
@@ -127,10 +132,15 @@ def main(
             help=f"Specify atmosphere. Options: {', '.join(ATMOSPHERES)}.",
         ),
     ] = None,
-    show_command: bool = True,
-    show_plan: bool = False,
+    show_command: Annotated[
+        bool, Parameter(help="Show a canonical command to reproduce the scene.")
+    ] = True,
+    show_plan: Annotated[
+        bool, Parameter(help="Show a top-down plan of the biomes.")
+    ] = False,
     clear: Annotated[bool, Parameter(help="Clear console before displaying.")] = True,
 ):
+    # STEP 1: Handle command line arguments
     if seed is None:
         seed = random.randint(0, 100000)
         # logger.info(f"Using random seed {seed}")
@@ -140,32 +150,41 @@ def main(
     depth = max(width // 4, height)
 
     # If neither biomes nor preset specified, pick a random preset
-    if not biome_names and not preset_name:
-        preset_name = rand_choice(list(PRESETS), seed)
+    _preset_name = (
+        _fuzzy_match(preset_name, list(PRESETS), seed)
+        if preset_name is not None
+        else rand_choice(list(PRESETS), seed)
+    )
+    _biome_names, _atmosphere_name = _get_preset(_preset_name, seed)
+    if biome_names == []:
+        biome_names = _biome_names
+    if atmosphere_name is None:
+        atmosphere_name = _atmosphere_name
 
-    if preset_name is not None:
-        assert preset_name is not None
-        _biome_names, _atmosphere_name = _get_preset(preset_name, seed)
-        if biome_names == []:
-            biome_names = _biome_names
-        if atmosphere_name is None:
-            atmosphere_name = _atmosphere_name
-
+    assert biome_names is not None
+    assert atmosphere_name is not None
     biomes = _get_biomes(biome_names, seed)
     atmosphere = _get_atmosphere(atmosphere_name, seed)
 
-    # Generate landscape
+    # STEP 2: Generate landscape
     biome_map = generate_biome_map(width, depth, biomes, seed)
     tree_map = generate_tree_map(width, depth, biome_map, seed)
     height_map = generate_height_map(width, depth, height, biome_map, seed)
 
+    # STEP 3: Display outputs
     if clear:
         clear_console()
     if show_plan:
         render_plan(biome_map, tree_map, seed)
 
     if show_command:
-        _show_command(render_params, preset_name, biomes, atmosphere, seed)
+        _show_command(
+            render_params,
+            _preset_name if preset_name else None,
+            biomes,
+            atmosphere,
+            seed,
+        )
 
     render_with_depth(render_params, height_map, biome_map, tree_map, atmosphere, seed)
 
