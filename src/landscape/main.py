@@ -85,9 +85,9 @@ def _get_preset(preset_name: str, seed: int):
 
 def _show_command(render_params, preset_name, biomes, atmosphere, seed):
     def param(parameter, val):
-        return (
-            f"\033[2m--{parameter}\033[m {slugify(str(val))}" if val is not None else ""
-        )
+        if val is None:
+            return ""
+        return f"\033[2m--{parameter}\033[m {slugify(str(val))}"
 
     bits = [
         "landscape",
@@ -96,7 +96,7 @@ def _show_command(render_params, preset_name, biomes, atmosphere, seed):
         *([param("biome", biome.name) for biome in biomes] if not preset_name else []),
         param("atmosphere", atmosphere.name),
     ]
-    print(" ".join(bits))
+    print(" ".join(bit for bit in bits if bit))
 
 
 @app.default
@@ -141,30 +141,34 @@ def main(
     clear: Annotated[bool, Parameter(help="Clear console before displaying.")] = True,
 ):
     # STEP 1: Handle command line arguments
-    if seed is None:
-        seed = random.randint(0, 100000)
-        # logger.info(f"Using random seed {seed}")
-    assert seed is not None
+    try:
+        if seed is None:
+            seed = random.randint(0, 100000)
+            # logger.info(f"Using random seed {seed}")
+        assert seed is not None
 
-    width, height = render_params.width, render_params.height
-    depth = max(width // 4, height)
+        width, height = render_params.width, render_params.height
+        depth = max(width // 4, height)
 
-    # If neither biomes nor preset specified, pick a random preset
-    _preset_name = (
-        _fuzzy_match(preset_name, list(PRESETS), seed)
-        if preset_name is not None
-        else rand_choice(list(PRESETS), seed)
-    )
-    _biome_names, _atmosphere_name = _get_preset(_preset_name, seed)
-    if biome_names == []:
-        biome_names = _biome_names
-    if atmosphere_name is None:
-        atmosphere_name = _atmosphere_name
+        # If neither biomes nor preset specified, pick a random preset
+        _preset_name = (
+            _fuzzy_match(preset_name, list(PRESETS), seed)
+            if preset_name is not None
+            else rand_choice(list(PRESETS), seed)
+        )
+        _biome_names, _atmosphere_name = _get_preset(_preset_name, seed)
+        if biome_names == []:
+            biome_names = _biome_names
+        if atmosphere_name is None:
+            atmosphere_name = _atmosphere_name
 
-    assert biome_names is not None
-    assert atmosphere_name is not None
-    biomes = _get_biomes(biome_names, seed)
-    atmosphere = _get_atmosphere(atmosphere_name, seed)
+        assert biome_names is not None
+        assert atmosphere_name is not None
+        biomes = _get_biomes(biome_names, seed)
+        atmosphere = _get_atmosphere(atmosphere_name, seed)
+    except ValueError as e:
+        print(f"ERROR: {e}")
+        raise SystemExit(1)
 
     # STEP 2: Generate landscape
     biome_map = generate_biome_map(width, depth, biomes, seed)
