@@ -5,6 +5,7 @@ from typing import Annotated
 
 from cyclopts import Parameter
 
+from landscape.atmospheres import Atmosphere
 from landscape.biomes import TREE_CHARS, Biome
 from landscape.utils import RGB, lerp_color, noise_2d, rgb
 
@@ -17,12 +18,16 @@ DEFAULT_HEIGHT = max(8, TERM_SIZE.lines - 10)  # Leave room for prompt/status
 class RenderParams:
     width: Annotated[
         int,
-        Parameter(help="Display width in character cells; defaults to full width."),
+        Parameter(
+            name=["--width", "-w"],
+            help="Display width in character cells; defaults to full width.",
+        ),
     ] = DEFAULT_WIDTH
-    height: Annotated[int, Parameter(help="Display height in character cells")] = (
-        DEFAULT_HEIGHT
-    )
-    sperical: float = 0.1
+    height: Annotated[
+        int,
+        Parameter(name=["--height", "-h"], help="Display height in character cells"),
+    ] = DEFAULT_HEIGHT
+    spherical: float = 0.1
     elevation: float = 0.5  # TODO: 0 = head on, 1 = plan view
     horizon: float = 0.5
 
@@ -45,7 +50,9 @@ def render_with_depth(
     height_map: list[list[float]],
     biome_map: list[list[tuple[Biome, Biome, float]]],
     tree_map: list[list[bool]],
+    atmosphere: Atmosphere,
     seed,
+    show_landscape=True,
 ) -> None:
     """Render 2D heightmap with depth shading and oblique projection.
 
@@ -83,12 +90,14 @@ def render_with_depth(
         for x in range(width):
             z = depth_buffer[y][x]
 
-            if z > depth:
-                # Sky
-                bg = lerp_color(rgb("#aabbff"), rgb("#003a8c"), y / screen_height)
-                fg = lerp_color(rgb("#aabbff"), rgb("#8899ff"), y / screen_height)
-                lines[y][x] = (" ", fg, bg)
+            # Sky
+            if not show_landscape or z > depth:
+                ny = (y - screen_height * render_params.horizon) / (
+                    screen_height * render_params.horizon
+                )
+                lines[y][x] = atmosphere.texture(x, ny, ny, seed)
                 continue
+
             # Terrain - check for edges
             cell = get_color_at_point(x, z)
 
@@ -107,7 +116,10 @@ def render_with_depth(
 
             lines[y][x] = (char, fg, bg)
 
-    # Add trees
+    # _render_lines(lines)
+
+    # Add trees -- this is kinda hacky, to allow trees to protrude above
+    # the horizon
     for y in range(screen_height - 1, -1, -1):
         for x in range(width):
             z = depth_buffer[y][x]
@@ -138,23 +150,32 @@ def render_with_depth(
 
                 lines[y][x] = (char2, lerp_color(fg, current[2], 0.6), bg)
                 if depth_buffer[y][z] >= depth:
+                    fg = lerp_color(fg, current_above[2], 0.1)
+                    if atmosphere.filter:
+                        fg = atmosphere.filter(x, z, y, fg)
                     lines[above][x] = (
                         char,
-                        lerp_color(fg, current_above[2], 0.1),
+                        fg,
                         current_above[2],
                     )
 
-    # Add haze
+    # Add haze and filter
     for y in range(screen_height):
         for x in range(width):
             z = depth_buffer[y][x]
-            # if z > depth:
-            #     continue
+            if z > depth:
+                continue
             hf = (0.2 * z / depth) ** 2
             cell = lines[y][x]
-            haze = lerp_color(rgb("#aabbff"), rgb("#64a5ff"), y / screen_height)
-            fg = lerp_color(cell[1], haze, hf)
-            bg = lerp_color(cell[2], haze, hf)
+            fg = cell[1]
+            bg = cell[2]
+            if hf > 0:
+                haze = lerp_color(rgb("#aabbff"), rgb("#64a5ff"), y / screen_height)
+                fg = lerp_color(fg, haze, hf)
+                bg = lerp_color(bg, haze, hf)
+            if atmosphere.filter:
+                fg = atmosphere.filter(x, z, y, fg)
+                bg = atmosphere.filter(x, z, y, bg)
             lines[y][x] = (cell[0], fg, bg)
 
     _render_lines(lines)
@@ -176,7 +197,7 @@ def make_depth_buffer(render_params: RenderParams, height_map, *, horizon=0.5):
     Project the height map to a depth buffer.
     """
     width, height = render_params.width, render_params.height
-    spherical = render_params.sperical
+    spherical = render_params.spherical
 
     depth = len(height_map[0])
 
@@ -226,3 +247,21 @@ def render_depth_buffer(depth_map):
             row.append(cell)
         lines.append(row)
     _render_lines(lines)
+
+
+def render_plan(biome_map, tree_map, seed: int) -> None:
+    width = len(biome_map)
+    depth = len(biome_map[0])
+
+    rows = []
+    for z in range(depth, 0, -1):
+        row = []
+        for x in range(width):
+            biome: Biome = biome_map[x][z - 1][0]
+            c = "^" if tree_map[x][z - 1] else biome.name[0]
+            c, fg, bg = biome.texture(x, z, 1.0, seed)
+            row.append(rgb_to_ansi_fg_bg(fg, bg))
+            row.append(c)
+        rows.append("".join(row))
+    print("\n".join(rows))
+    print(RESET)

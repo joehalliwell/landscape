@@ -1,54 +1,14 @@
 from dataclasses import dataclass, field
 
-from landscape.utils import RGB, lerp_color, noise_2d, rand_choice, rgb
-
-MAGENTA = rgb("#ff00ff")
-
-
-@dataclass
-class Colormap:
-    """A colormap running through a number of linear segments"""
-
-    colors: tuple[RGB, ...] = (MAGENTA,)
-    # segments: tuple[float,...] | None = None
-
-    def __post_init__(self):
-        assert len(self.colors) > 0
-
-    def val(self, v) -> RGB:
-        assert len(self.colors) > 0
-        # Only one
-        if len(self.colors) == 1:
-            return self.colors[0]
-        w = 1.0 / (len(self.colors) - 1)
-        idx = min(int(v / w), len(self.colors) - 2)
-        remainder = v - (idx * w)
-        result = lerp_color(self.colors[idx], self.colors[idx + 1], remainder)
-        return result
+from landscape.textures import Detail, Texture
+from landscape.utils import RGB, Colormap, cmap
 
 
-def cmap(*colors) -> Colormap:
-    """Factory function for colormaps"""
-    return Colormap(colors=tuple([rgb(color) for color in colors]))
-
-
-@dataclass
-class Detail:
-    """Decorative elements for a biome"""
-
-    name: str
-    chars: str | None
-    frequency: float = 50.0
-    density: float = 0.0
-    color_map: Colormap = field(default_factory=lambda: cmap(MAGENTA))
-    blend: float = 0.0  # Amount of background to blend in
-
-
-@dataclass
-class Biome:
+@dataclass(kw_only=True)
+class Biome(Texture):
     """Defines a landscape biome with colors and terrain properties."""
 
-    name: str
+    name: str = "Anonymous"
 
     # Terrain generation parameters
     roughness: float = 0.5  # Higher = more jagged
@@ -63,10 +23,6 @@ class Biome:
     # Single character details to add
     details: list[Detail] = field(default_factory=list)
 
-    def __post_init__(self):
-        # assert self.height_scale >= self.base_height
-        pass
-
     def texture(
         self,
         x: float,
@@ -76,26 +32,7 @@ class Biome:
         # ascii_only=False,
     ) -> tuple[str, RGB, RGB]:
         ny = (y - self.base_height) / self.height_scale
-        bg = self.color_map.val(ny)
-        fg = bg
-        c = " "
-        for i, detail in enumerate(self.details):
-            if (
-                noise_2d(x * 4 * detail.frequency, z * detail.frequency, seed * i)
-                <= detail.density
-            ):
-                c = rand_choice(detail.chars, x, z, seed)
-                fg = detail.color_map.val(
-                    noise_2d(
-                        x * 4 * detail.frequency,
-                        z * 4 * detail.frequency,
-                        seed + 100,
-                    )
-                )
-                fg = lerp_color(fg, bg, detail.blend)
-                break
-
-        return (c, fg, bg)
+        return super().texture(x, z, ny, seed)
 
 
 BIOMES = {

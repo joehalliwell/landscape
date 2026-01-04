@@ -1,4 +1,5 @@
 import math
+from dataclasses import dataclass
 from functools import cache
 from typing import Any, TypeAlias
 
@@ -6,6 +7,7 @@ RGB: TypeAlias = tuple[int, int, int]
 Cell: TypeAlias = tuple[str, RGB, RGB]
 
 SOLID_BLOCK = "█"
+MAGENTA = (255, 0, 255)
 
 
 @cache
@@ -24,18 +26,16 @@ def clamp(v, lo, hi):
     return v
 
 
-def rand(*seeds: Any) -> float:
-    n: int = 74761393
-    for x in seeds:
-        n += hash(x)
-        n = (n ^ (n >> 13)) * 1274126177
+def rand(seed: int) -> float:
+    n: int = seed * 374761393
+    n = (n ^ (n >> 13)) * 1274126177
     result = ((n ^ (n >> 16)) & 0xFFFF) / 0xFFFF
     assert result >= 0 and result <= 1
     return result
 
 
-def rand_choice(options: Any, *seeds: Any) -> Any:
-    choice = rand(*seeds)
+def rand_choice(options: Any, seed: int) -> Any:
+    choice = rand(seed)
     if choice == 1.0:
         choice = 0.0
 
@@ -103,3 +103,45 @@ def lerp_color(
         int(c1[1] * (1.0 - t) + c2[1] * t),
         int(c1[2] * (1.0 - t) + c2[2] * t),
     )
+
+
+@dataclass
+class Colormap:
+    """A colormap running through a number of linear segments"""
+
+    colors: tuple[RGB, ...] = (MAGENTA,)
+    # segments: tuple[float,...] | None = None
+
+    def __post_init__(self):
+        assert len(self.colors) > 0
+
+    def val(self, v) -> RGB:
+        assert len(self.colors) > 0
+        # Only one
+        if len(self.colors) == 1:
+            return self.colors[0]
+        v = clamp(v, 0.0, 1.0)
+        w = 1.0 / (len(self.colors) - 1)
+        idx = min(int(v / w), len(self.colors) - 2)
+        # assert idx <= len(self.colors) - 2, (v, idx)
+        remainder = (v - (idx * w)) / w
+        # assert remainder >= 0.0
+        # assert remainder <= 1.0
+        # print(v, remainder)
+        result = lerp_color(self.colors[idx], self.colors[idx + 1], remainder)
+        return result
+
+
+def cmap(*colors) -> Colormap:
+    """Factory function for colormaps"""
+    return Colormap(colors=tuple([rgb(color) for color in colors]))
+
+
+def slugify(text: str) -> str:
+    return text.lower().replace(" ", "_")
+
+
+def clear_console():
+    "Clear the screen"
+    print("\033[0;0H", end="")  # Move cursor
+    print("\033[2J", end="")  # Clear screen

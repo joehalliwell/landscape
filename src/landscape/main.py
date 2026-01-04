@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """ASCII landscape generator - voxel-based with 2D projection."""
 
+import itertools
 import random
 from typing import Annotated
 
 from cyclopts import App, Parameter
 
+from landscape.atmospheres import ATMOSPHERES
 from landscape.biomes import BIOMES, Biome
 from landscape.generation import (
     generate_biome_map,
@@ -14,10 +16,10 @@ from landscape.generation import (
 )
 from landscape.rendering import (
     RenderParams,
+    render_plan,
     render_with_depth,
-    rgb_to_ansi,
 )
-from landscape.utils import rand_choice
+from landscape.utils import clear_console, rand_choice, slugify
 
 # TODO: Standardize haze (use gradients for biome height mapping)
 # TODO: Generalize tree detailing mechanism
@@ -30,24 +32,8 @@ from landscape.utils import rand_choice
 app = App(help="Generated landscapes for the terminal")
 
 
-def render_plan(biome_map, tree_map):
-    width = len(biome_map)
-    depth = len(biome_map[0])
-
-    rows = []
-    for z in range(depth, 0, -1):
-        row = []
-        for x in range(width):
-            biome: Biome = biome_map[x][z - 1][0]
-            c = "^" if tree_map[x][z - 1] else biome.name[0]
-            row.append(rgb_to_ansi(*biome.color_lo))
-            row.append(c)
-        rows.append("".join(row))
-    print("\n".join(rows))
-
-
 # Predefined multi-biome combinations (near -> far)
-LANDSCAPES = {
+PRESETS = {
     "coastal": ["ocean", "plains", "forest"],
     "mountain_valley": ["plains", "forest", "mountains"],
     "alpine_lake": ["ocean", "alpine", "mountains"],
@@ -61,11 +47,6 @@ LANDSCAPES = {
 
 
 def _get_biomes(biome_names: list[str], seed) -> list[Biome]:
-    if biome_names == []:
-        # Random landscape
-        landscape_name = rand_choice(list(LANDSCAPES.keys()), seed)
-        biome_names = LANDSCAPES[landscape_name]
-
     biome_names = [name.lower() for name in biome_names]
     for name in biome_names:
         if name not in BIOMES:
@@ -94,32 +75,75 @@ def _get_biomes(biome_names: list[str], seed) -> list[Biome]:
     return biomes
 
 
-def _clear_console():
-    "Clear the screen"
-    print("\033[0;0H", end="")  # Move cursor
-    print("\033[2J", end="")  # Clear screen
+def _get_atmosphere(atmosphere_name):
+    return ATMOSPHERES[slugify(atmosphere_name)]
+
+
+def _get_preset(preset_name: str, seed):
+    biomes = PRESETS[preset_name]
+    atmospheres = list(ATMOSPHERES)
+    atmosphere = rand_choice(atmospheres, seed)
+    return biomes, atmosphere
+
+
+def _show_command(render_params, preset_name, biome_names, atmosphere_name, seed):
+    def flag(parameter):
+        return f"\033[2m--{parameter}\033[m"
+
+    bits = [
+        "landscape",
+        *[flag("seed"), str(seed)],
+        *[flag("preset"), preset_name],
+        *(
+            [
+                item
+                for pair in zip(itertools.cycle([flag("biome")]), biome_names)
+                for item in pair
+            ]
+            if not preset_name
+            else []
+        ),
+        *[flag("atmosphere"), atmosphere_name],
+        # *[flag("width"), str(render_params.width)],
+        # *[flag("height"), str(render_params.height)],
+    ]
+    print(" ".join(bits))
 
 
 @app.default
 def main(
+    preset_name: Annotated[
+        str | None,
+        Parameter(
+            name="preset", help=f"Specify preset. Options: {', '.join(PRESETS)}."
+        ),
+    ] = None,
+    seed: Annotated[
+        int | None,
+        Parameter(name=["--seed", "-s"], help="Random seed.", show_default=False),
+    ] = None,
+    *,
     render_params: Annotated[
         RenderParams, Parameter(name="*", group="Render parameters")
     ] = RenderParams(),
-    list_biomes: Annotated[
-        bool, Parameter(help="Display biomes and exit.", negative="")
-    ] = False,
     biome_names: Annotated[
         list[str],
         Parameter(
-            name="biome",
-            help="Specify biomes; may provide multiple; order is important.",
+            name=["--biome", "-b"],
+            help=f"Specify biomes; may provide multiple; order is important.Options: {', '.join(BIOMES)}.",
             show_default=False,
             negative_iterable="",
         ),
     ] = [],
-    seed: Annotated[
-        int | None, Parameter(help="Random seed.", show_default=False)
+    atmosphere_name: Annotated[
+        str | None,
+        Parameter(
+            name=["--atmosphere", "-a"],
+            help=f"Specify atmosphere. Options: {', '.join(ATMOSPHERES)}.",
+        ),
     ] = None,
+    show_command: bool = True,
+    show_plan: bool = False,
     clear: Annotated[bool, Parameter(help="Clear console before displaying.")] = True,
 ):
     if seed is None:
@@ -127,36 +151,40 @@ def main(
         # logger.info(f"Using random seed {seed}")
     assert seed is not None
 
-    # Parse biome(s) from command line
-    if list_biomes:
-        print("Biomes:")
-        for name, biome in BIOMES.items():
-            print(f"  {name}: {biome.name}")
-        print("\nLandscape presets:")
-        for name, biome_list in LANDSCAPES.items():
-            print(f"  {name}: {' + '.join(biome_list)}")
-        return
-
     width, height = render_params.width, render_params.height
-    depth = width
+    depth = max(width // 4, height)
+
+    # If neither biomes nor preset specified, pick a random preset
+    if not biome_names and not preset_name:
+        preset_name = rand_choice(list(PRESETS), seed)
+
+    if preset_name is not None:
+        assert preset_name is not None
+        _biome_names, _atmosphere_name = _get_preset(preset_name, seed)
+        if biome_names == []:
+            biome_names = _biome_names
+        if atmosphere_name is None:
+            atmosphere_name = _atmosphere_name
+
+    assert atmosphere_name is not None
 
     biomes = _get_biomes(biome_names, seed)
+    atmosphere = _get_atmosphere(atmosphere_name)
 
     # Generate landscape
     biome_map = generate_biome_map(width, depth, biomes, seed)
     tree_map = generate_tree_map(width, depth, biome_map, seed)
     height_map = generate_height_map(width, depth, height, biome_map, seed)
+
     if clear:
-        _clear_console()
-    if False:
-        render_plan(biome_map, tree_map)
+        clear_console()
+    if show_plan:
+        render_plan(biome_map, tree_map, seed)
 
-    # Scale depth, oblique, and height to fit terminal
-    label = " + ".join(b.name for b in biomes)
-    print(f"{label} | {width}x{height} | {seed} ")
+    if show_command:
+        _show_command(render_params, preset_name, biome_names, atmosphere_name, seed)
 
-    # render_params = RenderParams(width, height)
-    render_with_depth(render_params, height_map, biome_map, tree_map, seed)
+    render_with_depth(render_params, height_map, biome_map, tree_map, atmosphere, seed)
 
 
 if __name__ == "__main__":
