@@ -43,7 +43,7 @@ ATMOSPHERES = {
             ),
         ),
         Atmosphere(
-            name="Dawn",
+            name="Golden dawn",
             color_map=cmap(
                 "#ecb8ec",
                 "#F6FF8F",
@@ -75,7 +75,7 @@ ATMOSPHERES = {
             ),
         ),
         Atmosphere(
-            name="Sunset",
+            name="Ominous sunset",
             color_map=cmap(
                 "#FFD500",
                 "#ff0800",

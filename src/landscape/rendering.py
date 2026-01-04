@@ -7,7 +7,7 @@ from cyclopts import Parameter
 
 from landscape.atmospheres import Atmosphere
 from landscape.biomes import TREE_CHARS, Biome
-from landscape.utils import RGB, lerp_color, noise_2d, rgb
+from landscape.utils import RGB, clamp, lerp, lerp_color, noise_2d, rgb
 
 TERM_SIZE = shutil.get_terminal_size((120, 30))
 DEFAULT_WIDTH = TERM_SIZE.columns
@@ -70,53 +70,76 @@ def render_with_depth(
 
     haze = rgb("#aabbff")
 
-    def get_color_at_point(x: int, z: int) -> tuple[str, RGB, RGB]:
+    def get_color_at_point(x: int, z: int, y: int) -> tuple[str, RGB, RGB]:
         """Get blended color for a given point using biome map."""
+        # Sky
+        if not show_landscape or z > depth:
+            ny = (y - screen_height * render_params.horizon) / (
+                screen_height * render_params.horizon
+            )
+            return atmosphere.texture(x, ny, ny, seed)
 
         biome1, biome2, blend = biome_map[x][z]
         nx = x / width
         nz = z / depth
 
-        y = height_map[x][z]
-        cell1 = biome1.texture(nx, nz, y, seed)
-        cell2 = biome2.texture(nx, nz, y, seed)
+        ny = height_map[x][z]
+        cell1 = biome1.texture(nx, nz, ny, seed)
+        cell2 = biome2.texture(nx, nz, ny, seed)
+
+        #  Recompute blend based on height
+        if biome1.base_height > biome2.base_height:
+            blend = lerp(
+                1.0
+                - (
+                    clamp(ny, biome2.base_height, biome1.base_height)
+                    - biome2.base_height
+                )
+                / (biome1.base_height - biome2.base_height),
+                blend,
+                0.5,
+            )
+
+        elif biome2.base_height > biome1.base_height:
+            blend = lerp(
+                (clamp(ny, biome1.base_height, biome2.base_height) - biome1.base_height)
+                / (biome2.base_height - biome1.base_height),
+                blend,
+                0.5,
+            )
 
         bg = lerp_color(cell1[2], cell2[2], blend)
         dominant = cell1 if blend < 0.5 else cell2
         return (dominant[0], dominant[1], bg)
 
-    # Convert to lines with color and edge detection
+    # Convert to rows with color and edge detection
     for y in range(screen_height - 1, -1, -1):
         for x in range(width):
             z = depth_buffer[y][x]
 
-            # Sky
-            if not show_landscape or z > depth:
-                ny = (y - screen_height * render_params.horizon) / (
-                    screen_height * render_params.horizon
-                )
-                rows[y][x] = atmosphere.texture(x, ny, ny, seed)
-                continue
-
             # Terrain - check for edges
-            cell = get_color_at_point(x, z)
+            cell = get_color_at_point(x, z, y)
 
             char, fg, bg = cell
-            # FIXME: Renable this kind of edge detection
-            # lz = depth_buffer[y][max(0, x - 1)]
-            # rz = depth_buffer[y][min(x + 1, width - 1)]
-            # if lz > z:
-            #     bg = get_color_at_point(x, lz)
-            #     char = "🭋"
-            #     if rz > z:
-            #         char = "🭯"
-            # elif rz > z:
-            #     bg = get_color_at_point(x, rz)
-            #     char = "🭀"
+
+            # Edge detection/highlighting
+            lz = depth_buffer[y][max(0, x - 1)]
+            rz = depth_buffer[y][min(x + 1, width - 1)]
+
+            min_delta = 1.0
+            if z <= depth and char == " ":
+                if lz - z > min_delta or lz > depth:
+                    _, __, bg = get_color_at_point(x, lz, y)
+                    char = "🭋"
+                    if rz - z > min_delta or rz > depth:
+                        char = "🭯"
+                    # bg = MAGENTA
+                elif rz - z > min_delta or rz > depth:
+                    _, _, bg = get_color_at_point(x, rz, y)
+                    char = "🭀"
+                    # bg = MAGENTA
 
             rows[y][x] = (char, fg, bg)
-
-    # _render_lines(lines)
 
     # Add trees -- this is kinda hacky, to allow trees to protrude above
     # the horizon
@@ -147,17 +170,6 @@ def render_with_depth(
                 )
 
                 rows[y][x] = (char2, lerp_color(fg, current[2], 0.6), bg)
-                # above = min(screen_height - 1, y + 1)
-                # current_above = lines[above][x]
-                # if depth_buffer[y][z] >= depth:
-                #     fg = lerp_color(fg, current_above[2], 0.1)
-                #     if atmosphere.filter:
-                #         fg = atmosphere.filter(x, z, y, fg)
-                #     lines[above][x] = (
-                #         char,
-                #         fg,
-                #         current_above[2],
-                #     )
 
     # Add haze and filter
     for y in range(screen_height):

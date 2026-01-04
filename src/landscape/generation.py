@@ -54,6 +54,7 @@ def generate_biome_map(
 
             # Blend factor based on difference between top two
             diff = values[0][0] - values[1][0] if len(values) > 1 else 1.0
+
             # Sharper transitions - less blending
             blend_width = 0.05
             blend = max(0.0, min(1.0, 1.0 - diff / blend_width))
