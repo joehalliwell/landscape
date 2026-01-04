@@ -77,10 +77,12 @@ ATMOSPHERES = {
         Atmosphere(
             name="Sunset",
             color_map=cmap(
+                "#FFD500",
                 "#ff0800",
                 # "#FF8800",
                 # "#FF8A7B",
-                "#FFD500",
+                # "#690000",
+                "#480000",
             ),
             details=[
                 Detail(
@@ -88,21 +90,21 @@ ATMOSPHERES = {
                     chars=".",
                     density=0.01,
                     color_map=cmap("#ffffff"),
-                    blend=0.2,
+                    blend=0.0,
                 ),
                 Detail(
                     name="Dim Stars",
                     chars=".",
                     density=0.05,
                     color_map=cmap("#ffffff", "#cccccc"),
-                    blend=0.7,
+                    blend=0.3,
                 ),
             ],
             filter=lambda x, z, y, c: clamp_col(
                 (
-                    int(c[0] * 0.9 + 50),
-                    int(c[1] * 0.7 + 40),
-                    int(c[2] * 0.6),
+                    int(c[0] * 0.3),
+                    int(c[1] * 0.2 - 20),
+                    int(c[2] * 0.3 - 10),
                 )
             ),
         ),

@@ -11,7 +11,7 @@ from landscape.utils import RGB, lerp_color, noise_2d, rgb
 
 TERM_SIZE = shutil.get_terminal_size((120, 30))
 DEFAULT_WIDTH = TERM_SIZE.columns
-DEFAULT_HEIGHT = max(8, TERM_SIZE.lines - 10)  # Leave room for prompt/status
+DEFAULT_HEIGHT = max(8, TERM_SIZE.lines - 5)  # Leave room for prompt/status
 
 
 @dataclass
