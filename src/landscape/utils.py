@@ -1,6 +1,6 @@
 import math
 from functools import cache
-from typing import Any, TypeAlias, overload
+from typing import Any, TypeAlias
 
 RGB: TypeAlias = tuple[int, int, int]
 Cell: TypeAlias = tuple[str, RGB, RGB]
@@ -9,27 +9,11 @@ SOLID_BLOCK = "█"
 
 
 @cache
-def _rgb(color) -> RGB:
+def rgb(color) -> RGB:
     """Convert a CSS-style hex color string into and RGB tuple."""
     assert color[0] == "#"
     assert len(color) == 7
     return (int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16))
-
-
-@overload
-def rgb(color: str) -> RGB:
-    pass
-
-
-@overload
-def rgb(color: str, *tail: str) -> list[RGB]:
-    pass
-
-
-def rgb(color: str, *tail: str) -> RGB | list[RGB]:
-    if not tail:
-        return _rgb(color)
-    return [_rgb(color)] + [_rgb(c) for c in tail]
 
 
 def clamp(v, lo, hi):

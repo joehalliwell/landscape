@@ -15,11 +15,16 @@ DEFAULT_HEIGHT = max(8, TERM_SIZE.lines - 10)  # Leave room for prompt/status
 
 @dataclass
 class RenderParams:
-    width: Annotated[int, Parameter(help="The width")] = DEFAULT_WIDTH
-    height: Annotated[int, Parameter(help="The height in character cells")] = (
-        DEFAULT_HEIGHT
-    )
-    sperical: float = 0.2
+    width: Annotated[
+        int,
+        Parameter(
+            help="Display width in character cells; defaults to full width."
+        ),
+    ] = DEFAULT_WIDTH
+    height: Annotated[
+        int, Parameter(help="Display height in character cells")
+    ] = DEFAULT_HEIGHT
+    sperical: float = 0.1
     elevation: float = 0.5  # TODO: 0 = head on, 1 = plan view
     horizon: float = 0.5
 

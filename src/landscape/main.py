@@ -94,6 +94,12 @@ def _get_biomes(biome_names: list[str], seed) -> list[Biome]:
     return biomes
 
 
+def _clear_console():
+    "Clear the screen"
+    print("\033[0;0H", end="")  # Move cursor
+    print("\033[2J", end="")  # Clear screen
+
+
 @app.default
 def main(
     render_params: Annotated[
@@ -106,14 +112,17 @@ def main(
         list[str],
         Parameter(
             name="biome",
-            help="Specify biomes",
+            help="Specify biomes; may provide multiple; order is important.",
             show_default=False,
             negative_iterable="",
         ),
     ] = [],
     seed: Annotated[
-        int | None, Parameter(help="Random seed", show_default=False)
+        int | None, Parameter(help="Random seed.", show_default=False)
     ] = None,
+    clear: Annotated[
+        bool, Parameter(help="Clear console before displaying.")
+    ] = True,
 ):
     if seed is None:
         seed = random.randint(0, 100000)
@@ -135,17 +144,18 @@ def main(
 
     biomes = _get_biomes(biome_names, seed)
 
-    # Scale depth, oblique, and height to fit terminal
-    label = " + ".join(b.name for b in biomes)
-    print(f"{label} | {width}x{height} | {seed} ")
-
     # Generate landscape
     biome_map = generate_biome_map(width, depth, biomes, seed)
     tree_map = generate_tree_map(width, depth, biome_map, seed)
     height_map = generate_height_map(width, depth, height, biome_map, seed)
-
+    if clear:
+        _clear_console()
     if False:
         render_plan(biome_map, tree_map)
+
+    # Scale depth, oblique, and height to fit terminal
+    label = " + ".join(b.name for b in biomes)
+    print(f"{label} | {width}x{height} | {seed} ")
 
     # render_params = RenderParams(width, height)
     render_with_depth(render_params, height_map, biome_map, tree_map, seed)

@@ -1,12 +1,14 @@
 from dataclasses import dataclass, field
 
-from landscape.utils import RGB, _rgb, lerp_color, noise_2d, rand_choice
+from landscape.utils import RGB, lerp_color, noise_2d, rand_choice, rgb
 
-MAGENTA = _rgb("#ff00ff")
+MAGENTA = rgb("#ff00ff")
 
 
 @dataclass
 class Colormap:
+    """A colormap running through a number of linear segments"""
+
     colors: tuple[RGB, ...] = (MAGENTA,)
     # segments: tuple[float,...] | None = None
 
@@ -26,7 +28,8 @@ class Colormap:
 
 
 def cmap(*colors) -> Colormap:
-    return Colormap(colors=tuple([_rgb(color) for color in colors]))
+    """Factory function for colormaps"""
+    return Colormap(colors=tuple([rgb(color) for color in colors]))
 
 
 @dataclass
@@ -35,10 +38,10 @@ class Detail:
 
     name: str
     chars: str | None
-    frequency: float = 1.0
+    frequency: float = 50.0
     density: float = 0.0
     color_map: Colormap = field(default_factory=lambda: cmap(MAGENTA))
-    blend: float = 0.0
+    blend: float = 0.0  # Amount of background to blend in
 
 
 @dataclass
@@ -47,14 +50,17 @@ class Biome:
 
     name: str
 
-    color_map: Colormap
-
     # Terrain generation parameters
     roughness: float = 0.5  # Higher = more jagged
-    height_scale: float = 1.0  # Vertical exaggeration
     base_height: float = 0.3  # Minimum terrain height (0-1)
+    height_scale: float = 0.7  # Height to add
 
     tree_density: float = 0.0  # Tree coverage (0-1)
+
+    # Texture cponfig
+    color_map: Colormap = field(
+        default_factory=lambda: cmap("#000000", "#ffffff")
+    )
 
     # Single character details to add
     details: list[Detail] = field(default_factory=list)
