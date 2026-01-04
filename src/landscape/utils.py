@@ -1,6 +1,6 @@
 import math
 from functools import cache
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, overload
 
 RGB: TypeAlias = tuple[int, int, int]
 Cell: TypeAlias = tuple[str, RGB, RGB]
@@ -9,10 +9,27 @@ SOLID_BLOCK = "█"
 
 
 @cache
-def rgb(str) -> RGB:
+def _rgb(color) -> RGB:
     """Convert a CSS-style hex color string into and RGB tuple."""
-    assert str[0] == "#"
-    return (int(str[1:3], 16), int(str[3:5], 16), int(str[5:7], 16))
+    assert color[0] == "#"
+    assert len(color) == 7
+    return (int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16))
+
+
+@overload
+def rgb(color: str) -> RGB:
+    pass
+
+
+@overload
+def rgb(color: str, *tail: str) -> list[RGB]:
+    pass
+
+
+def rgb(color: str, *tail: str) -> RGB | list[RGB]:
+    if not tail:
+        return _rgb(color)
+    return [_rgb(color)] + [_rgb(c) for c in tail]
 
 
 def clamp(v, lo, hi):
@@ -61,7 +78,9 @@ def noise_2d(x: float, z: float, seed: int = 0) -> float:
     c01 = hash_coord(x0, z1)
     c11 = hash_coord(x1, z1)
 
-    return (c00 * (1 - tx) + c10 * tx) * (1 - tz) + (c01 * (1 - tx) + c11 * tx) * tz
+    return (c00 * (1 - tx) + c10 * tx) * (1 - tz) + (
+        c01 * (1 - tx) + c11 * tx
+    ) * tz
 
 
 def fractal_noise_2d(
@@ -79,7 +98,9 @@ def fractal_noise_2d(
     max_value = 0.0
 
     for i in range(octaves):
-        total += noise_2d(x * frequency, z * frequency, seed + i * 1000) * amplitude
+        total += (
+            noise_2d(x * frequency, z * frequency, seed + i * 1000) * amplitude
+        )
         max_value += amplitude
         amplitude *= persistence
         frequency *= 2

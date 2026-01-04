@@ -20,7 +20,12 @@ def generate_biome_map(
             for z in range(depth):
                 # Base noise for this biome
                 n = fractal_noise_2d(
-                    x, z, octaves=2, persistence=0.5, scale=0.025, seed=seed + i * 1000
+                    x,
+                    z,
+                    octaves=2,
+                    persistence=0.5,
+                    scale=0.025,
+                    seed=seed + i * 1000,
                 )
 
                 # Add depth bias: earlier biomes prefer near, later prefer far
@@ -40,7 +45,9 @@ def generate_biome_map(
         row: list[tuple[Biome, Biome, float]] = []
         for z in range(depth):
             # Get noise values for all biomes at this point
-            values = [(biome_noise[i][x][z], biomes[i]) for i in range(len(biomes))]
+            values = [
+                (biome_noise[i][x][z], biomes[i]) for i in range(len(biomes))
+            ]
             values.sort(key=lambda v: v[0], reverse=True)
 
             # Top two biomes
@@ -118,7 +125,10 @@ def generate_height_map(
 
 
 def generate_tree_map(
-    width: int, depth: int, biome_map: list[list[tuple[Biome, Biome, float]]], seed: int
+    width: int,
+    depth: int,
+    biome_map: list[list[tuple[Biome, Biome, float]]],
+    seed: int,
 ) -> list[list[bool]]:
     """Generate a 2D tree placement map based on biome density."""
     tree_map = []
