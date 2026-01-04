@@ -20,15 +20,7 @@ from landscape.rendering import (
 )
 from landscape.utils import clear_console, rand_choice, slugify
 
-# TODO: Standardize haze (use gradients for biome height mapping)
-# TODO: Generalize tree detailing mechanism
-# TODO: Add beach
-# TODO: Add time of day
-# TODO: Add seasons
-# TODO: Add weather
-# TODO: Add shadows!?
-
-app = App(help="Generated landscapes for the terminal")
+app = App(help="Generated landscapes for the terminal.")
 
 
 # Predefined multi-biome combinations (near -> far)
