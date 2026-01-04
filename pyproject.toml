@@ -5,7 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 authors = [{ name = "Joe Halliwell", email = "joe.halliwell@gmail.com" }]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "cyclopts>=4.4.3",
+]
 
 [project.scripts]
 landscape = "landscape.main:main"
