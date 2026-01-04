@@ -28,14 +28,14 @@ ATMOSPHERES = {
                     chars=".",
                     density=0.01,
                     color_map=cmap("#ffffff"),
-                    blend=0.2,
+                    blend=0.1,
                 ),
                 Detail(
                     name="Dim Stars",
                     chars=".",
                     density=0.05,
                     color_map=cmap("#ffffff", "#cccccc"),
-                    blend=0.7,
+                    blend=0.4,
                 ),
             ],
             filter=lambda x, z, y, c: clamp_col(
@@ -66,10 +66,12 @@ ATMOSPHERES = {
                     blend=0.7,
                 ),
             ],
-            filter=lambda x, z, y, c: (
-                int(c[0] * 0.9 + 20),
-                int(c[1] * 0.7 + 10),
-                int(c[2] * 0.6),
+            filter=lambda x, z, y, c: clamp_col(
+                (
+                    int(c[0] * 0.9 + 20),
+                    int(c[1] * 0.7 + 10),
+                    int(c[2] * 0.6),
+                )
             ),
         ),
         Atmosphere(
@@ -96,10 +98,12 @@ ATMOSPHERES = {
                     blend=0.7,
                 ),
             ],
-            filter=lambda x, z, y, c: (
-                int(c[0] * 0.9 + 50),
-                int(c[1] * 0.7 + 40),
-                int(c[2] * 0.6),
+            filter=lambda x, z, y, c: clamp_col(
+                (
+                    int(c[0] * 0.9 + 50),
+                    int(c[1] * 0.7 + 40),
+                    int(c[2] * 0.6),
+                )
             ),
         ),
     ]

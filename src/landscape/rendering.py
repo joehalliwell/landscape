@@ -42,7 +42,7 @@ def rgb_to_ansi_fg_bg(fg: tuple[int, int, int], bg: tuple[int, int, int]) -> str
     return f"\033[38;2;{fg[0]};{fg[1]};{fg[2]};48;2;{bg[0]};{bg[1]};{bg[2]}m"
 
 
-RESET = "\033[0m"
+RESET = "\033[m"
 
 
 def render_with_depth(
@@ -63,8 +63,8 @@ def render_with_depth(
     width, screen_height = render_params.width, render_params.height
     depth = len(biome_map[0])
 
-    lines = [
-        [(".", rgb("#ff00ff"), rgb("#ff00ff")) for _ in range(width)]
+    rows = [
+        [("X", rgb("#ff00ff"), rgb("#ff00ff")) for _ in range(width)]
         for _ in range(screen_height)
     ]
 
@@ -95,7 +95,7 @@ def render_with_depth(
                 ny = (y - screen_height * render_params.horizon) / (
                     screen_height * render_params.horizon
                 )
-                lines[y][x] = atmosphere.texture(x, ny, ny, seed)
+                rows[y][x] = atmosphere.texture(x, ny, ny, seed)
                 continue
 
             # Terrain - check for edges
@@ -114,7 +114,7 @@ def render_with_depth(
             #     bg = get_color_at_point(x, rz)
             #     char = "🭀"
 
-            lines[y][x] = (char, fg, bg)
+            rows[y][x] = (char, fg, bg)
 
     # _render_lines(lines)
 
@@ -124,8 +124,8 @@ def render_with_depth(
         for x in range(width):
             z = depth_buffer[y][x]
             has_tree = tree_map[x][z] if z <= depth else False
-            if has_tree and lines[y][x][0] == " ":
-                current = lines[y][x]
+            if has_tree and rows[y][x][0] == " ":
+                current = rows[y][x]
                 char = random.choice(TREE_CHARS)
                 char2 = random.choice(TREE_CHARS)
                 t = z / depth  # 0 = near, 1 = far
@@ -146,7 +146,7 @@ def render_with_depth(
                     int(current[2][2] * f),
                 )
 
-                lines[y][x] = (char2, lerp_color(fg, current[2], 0.6), bg)
+                rows[y][x] = (char2, lerp_color(fg, current[2], 0.6), bg)
                 # above = min(screen_height - 1, y + 1)
                 # current_above = lines[above][x]
                 # if depth_buffer[y][z] >= depth:
@@ -163,10 +163,10 @@ def render_with_depth(
     for y in range(screen_height):
         for x in range(width):
             z = depth_buffer[y][x]
-            if z > depth:
-                continue
+            # if z > depth:
+            #     continue
             hf = (0.2 * z / depth) ** 2
-            cell = lines[y][x]
+            cell = rows[y][x]
             fg = cell[1]
             bg = cell[2]
             if hf > 0:
@@ -176,12 +176,12 @@ def render_with_depth(
             if atmosphere.filter:
                 fg = atmosphere.filter(x, z, y, fg)
                 bg = atmosphere.filter(x, z, y, bg)
-            lines[y][x] = (cell[0], fg, bg)
+            rows[y][x] = (cell[0], fg, bg)
 
-    _render_lines(lines)
+    _render_rows(rows)
 
 
-def _render_lines(lines):
+def _render_rows(lines):
     height = len(lines)
     width = len(lines[0])
     for y in range(height - 1, -1, -1):
@@ -246,7 +246,7 @@ def render_depth_buffer(depth_map):
             cell = (" ", col, col)
             row.append(cell)
         lines.append(row)
-    _render_lines(lines)
+    _render_rows(lines)
 
 
 def render_plan(biome_map, tree_map, seed: int) -> None:
@@ -254,14 +254,11 @@ def render_plan(biome_map, tree_map, seed: int) -> None:
     depth = len(biome_map[0])
 
     rows = []
-    for z in range(depth, 0, -1):
+    for z in range(depth):
         row = []
         for x in range(width):
-            biome: Biome = biome_map[x][z - 1][0]
-            c = "^" if tree_map[x][z - 1] else biome.name[0]
-            c, fg, bg = biome.texture(x, z, 1.0, seed)
-            row.append(rgb_to_ansi_fg_bg(fg, bg))
-            row.append(c)
-        rows.append("".join(row))
-    print("\n".join(rows))
-    print(RESET)
+            biome: Biome = biome_map[x][z][0]
+            cell = biome.texture(x, z, 1.0, seed)
+            row.append(cell)
+        rows.append(row)
+    _render_rows(rows)

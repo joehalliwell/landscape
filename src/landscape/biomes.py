@@ -63,10 +63,10 @@ BIOMES = {
     ),
     "mountains": Biome(
         name="Mountains",
-        color_map=cmap("#202020", "#ffffff"),  # Snowy peaks / sky
+        color_map=cmap("#151515", "#ffffff"),  # Snowy peaks / sky
         roughness=0.8,
         height_scale=1.0,
-        base_height=0.6,
+        base_height=0.5,
         tree_density=0.05,
         details=[
             Detail(

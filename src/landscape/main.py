@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """ASCII landscape generator - voxel-based with 2D projection."""
 
-import itertools
 import random
 from typing import Annotated
 
@@ -75,7 +74,9 @@ def _get_biomes(biome_names: list[str], seed) -> list[Biome]:
     return biomes
 
 
-def _get_atmosphere(atmosphere_name):
+def _get_atmosphere(atmosphere_name, seed):
+    if atmosphere_name is None:
+        atmosphere_name = rand_choice(list(ATMOSPHERES), seed)
     return ATMOSPHERES[slugify(atmosphere_name)]
 
 
@@ -86,26 +87,18 @@ def _get_preset(preset_name: str, seed):
     return biomes, atmosphere
 
 
-def _show_command(render_params, preset_name, biome_names, atmosphere_name, seed):
-    def flag(parameter):
-        return f"\033[2m--{parameter}\033[m"
+def _show_command(render_params, preset_name, biomes, atmosphere, seed):
+    def param(parameter, val):
+        return (
+            f"\033[2m--{parameter}\033[m {slugify(str(val))}" if val is not None else ""
+        )
 
     bits = [
         "landscape",
-        *[flag("seed"), str(seed)],
-        *[flag("preset"), preset_name],
-        *(
-            [
-                item
-                for pair in zip(itertools.cycle([flag("biome")]), biome_names)
-                for item in pair
-            ]
-            if not preset_name
-            else []
-        ),
-        *[flag("atmosphere"), atmosphere_name],
-        # *[flag("width"), str(render_params.width)],
-        # *[flag("height"), str(render_params.height)],
+        param("seed", seed),
+        param("preset", preset_name),
+        *([param("biome", biome.name) for biome in biomes] if not preset_name else []),
+        param("atmosphere", atmosphere.name),
     ]
     print(" ".join(bits))
 
@@ -166,10 +159,8 @@ def main(
         if atmosphere_name is None:
             atmosphere_name = _atmosphere_name
 
-    assert atmosphere_name is not None
-
     biomes = _get_biomes(biome_names, seed)
-    atmosphere = _get_atmosphere(atmosphere_name)
+    atmosphere = _get_atmosphere(atmosphere_name, seed)
 
     # Generate landscape
     biome_map = generate_biome_map(width, depth, biomes, seed)
@@ -182,7 +173,7 @@ def main(
         render_plan(biome_map, tree_map, seed)
 
     if show_command:
-        _show_command(render_params, preset_name, biome_names, atmosphere_name, seed)
+        _show_command(render_params, preset_name, biomes, atmosphere, seed)
 
     render_with_depth(render_params, height_map, biome_map, tree_map, atmosphere, seed)
 

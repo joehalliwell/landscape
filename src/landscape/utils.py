@@ -137,6 +137,7 @@ class Colormap:
         # assert remainder <= 1.0
         # print(v, remainder)
         result = lerp_color(self.colors[idx], self.colors[idx + 1], remainder)
+        # result = clamp_col(result)
         return result
 
 
