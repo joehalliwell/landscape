@@ -126,8 +126,9 @@ def main(
     # STEP 3: Display outputs
     if clear:
         clear_console()
+
     if show_plan:
-        render_plan(landscape.biome_map, landscape.tree_map, landscape.seed)
+        render_plan(landscape.biome_map, landscape.seed)
 
     if show_command:
         _show_command(render_params, config)

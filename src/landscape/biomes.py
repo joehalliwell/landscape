@@ -21,6 +21,32 @@ class BiomeCode(IntEnum):
     EMPTY = 15  # Slot unused
 
 
+# Tree characters - triangular shapes
+TREE_CHARS = ["△", "▲", "▴", "◭", "◮"]
+
+
+TREE_CMAP = cmap(
+    "#0a290a",  # Deep shadow green
+    "#1e6414",  # Forest green
+    "#154f30",  # Blue-ish pine
+    "#32a01e",  # Vibrant green
+    "#4a6b12",  # Olive
+    "#6b8c21",  # Lighter yellow-green
+)
+
+
+def tree_detail(density: float) -> Detail:
+    return Detail(
+        name="Trees",
+        chars="".join(TREE_CHARS),
+        density=density,
+        frequency=20,
+        color_map=TREE_CMAP,
+        blend=0.6,
+        height=0.05,
+    )
+
+
 @dataclass(kw_only=True)
 class Biome(Texture):
     """Defines a landscape biome with colors and terrain properties."""
@@ -32,8 +58,6 @@ class Biome(Texture):
     roughness: float = 0.5  # Higher = more jagged
     base_height: float = 0.3  # Minimum terrain height (0-1)
     height_scale: float = 0.7  # Height to add
-
-    tree_density: float = 0.0  # Tree coverage (0-1)
 
     # Texture cponfig
     color_map: Colormap = field(default_factory=lambda: cmap("#000000", "#ffffff"))
@@ -67,7 +91,6 @@ BIOMES = {
             roughness=0.2,
             height_scale=0.05,
             base_height=0.1,
-            tree_density=0.0,
             details=[
                 Detail(
                     name="Rollers",
@@ -85,7 +108,7 @@ BIOMES = {
             roughness=0.1,
             height_scale=0.4,
             base_height=0.4,
-            tree_density=0.7,
+            details=[tree_detail(0.7)],
         ),
         Biome(
             code=BiomeCode.MOUNTAINS,
@@ -94,8 +117,8 @@ BIOMES = {
             roughness=0.8,
             height_scale=1.0,
             base_height=0.5,
-            tree_density=0.05,
             details=[
+                tree_detail(0.05),
                 Detail(
                     name="Shadows",
                     chars="🭋🭯🭀/\\",
@@ -129,8 +152,8 @@ BIOMES = {
             roughness=0.6,
             height_scale=0.3,
             base_height=0.4,
-            tree_density=0.85,
             details=[
+                tree_detail(0.85),
                 Detail(
                     name="Flower",
                     chars="*",
@@ -161,7 +184,6 @@ BIOMES = {
             roughness=0.4,
             height_scale=0.2,
             base_height=0.2,
-            tree_density=0.0,
             details=[
                 Detail(
                     name="Explorer's Flag",
@@ -179,15 +201,15 @@ BIOMES = {
             roughness=0.2,
             height_scale=0.4,
             base_height=0.3,
-            tree_density=0.15,
             details=[
+                tree_detail(0.15),
                 Detail(
                     name="Grasses",
                     chars='"',
                     frequency=2,
                     density=0.5,
                     color_map=cmap("#489c33", "#5F8506"),  # Hazy yellow-green
-                )
+                ),
             ],
         ),
         Biome(
@@ -197,15 +219,15 @@ BIOMES = {
             roughness=0.3,
             height_scale=0.2,
             base_height=0.3,
-            tree_density=0.02,
             details=[
+                tree_detail(0.02),
                 Detail(
                     name="Catcus",
                     chars="Ψ",
                     frequency=50,
                     density=0.05,
                     color_map=cmap("#055e00", "#08a000"),
-                )
+                ),
             ],
         ),
         Biome(
@@ -215,13 +237,10 @@ BIOMES = {
             roughness=0.7,
             height_scale=0.8,
             base_height=0.6,
-            tree_density=0.6,
+            details=[tree_detail(0.6)],
         ),
     ]
 }
-
-# Tree characters - triangular shapes
-TREE_CHARS = ["△", "▲", "▴", "◭", "◮"]
 
 
 # Predefined multi-biome combinations (near -> far)

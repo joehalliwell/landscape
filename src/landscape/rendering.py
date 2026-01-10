@@ -1,18 +1,16 @@
-import random
 import shutil
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated
 
 from cyclopts import Parameter
 
-from landscape.biomes import TREE_CHARS, Biome
+from landscape.biomes import Biome
 from landscape.utils import (
     RGB,
     clamp,
     contrasting_text_color,
     lerp,
     lerp_color,
-    noise_2d,
     rgb,
 )
 
@@ -67,7 +65,6 @@ def render(
     """
     height_map = landscape.height_map
     biome_map = landscape.biome_map
-    tree_map = landscape.tree_map
     atmosphere = landscape.atmosphere
     seed = landscape.seed
 
@@ -157,36 +154,6 @@ def render(
                     # bg = MAGENTA
 
             rows[y][x] = (char, fg, bg)
-
-    # Add trees -- this is kinda hacky, to allow trees to protrude above
-    # the horizon
-    for y in range(screen_height - 1, -1, -1):
-        for x in range(width):
-            z = depth_buffer[y][x]
-            has_tree = tree_map[x][z] if z <= depth else False
-            if has_tree and rows[y][x][0] == " ":
-                current = rows[y][x]
-                char = random.choice(TREE_CHARS)
-                char2 = random.choice(TREE_CHARS)
-                t = z / depth  # 0 = near, 1 = far
-                # Vary hue slightly (more yellow or more blue-green)
-                hue_shift = noise_2d(x, z, seed=1234) * 40 - 20
-                # Vary saturation/brightness
-                bright_var = noise_2d(x, z, seed=5678) * 100 - (200 * t)
-
-                fg = (
-                    int(max(0, min(255, 30 + t * 40 + hue_shift * 0.5))),
-                    int(max(0, min(255, 180 + t * 50 + bright_var))),
-                    int(max(0, min(255, 20 + t * 30 - hue_shift * 0.3))),
-                )
-                f = 0.8
-                bg = (
-                    int(current[2][0] * f),
-                    int(current[2][1] * f),
-                    int(current[2][2] * f),
-                )
-
-                rows[y][x] = (char2, lerp_color(fg, current[2], 0.6), bg)
 
     # Add haze and filter
     for y in range(screen_height):
@@ -288,7 +255,7 @@ def render_depth_buffer(depth_map):
     _render_rows(lines)
 
 
-def render_plan(biome_map, tree_map, seed: int) -> None:
+def render_plan(biome_map, seed: int) -> None:
     width = len(biome_map)
     depth = len(biome_map[0])
 

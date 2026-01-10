@@ -15,7 +15,6 @@ class GeneratedLandscape:
     depth: int
     biome_map: list[list[tuple[Biome, Biome, float]]]
     height_map: list[list[float]]
-    tree_map: list[list[bool]]
     atmosphere: Atmosphere
     seed: int
 
@@ -25,7 +24,6 @@ def generate(
 ) -> GeneratedLandscape:
     """Generate a complete landscape from configuration."""
     biome_map = generate_biome_map(width, depth, list(config.biomes), config.seed)
-    tree_map = generate_tree_map(width, depth, biome_map, config.seed)
     height_map = generate_height_map(width, depth, max_height, biome_map, config.seed)
 
     return GeneratedLandscape(
@@ -33,7 +31,6 @@ def generate(
         depth=depth,
         biome_map=biome_map,
         height_map=height_map,
-        tree_map=tree_map,
         atmosphere=config.atmosphere,
         seed=config.seed,
     )
@@ -154,33 +151,15 @@ def generate_height_map(
             y1 = normed * biome1.height_scale + biome1.base_height
             y2 = normed * biome2.height_scale + biome2.base_height
             result = lerp(y1, y2, blend)
+
+            # Add detail height
+            nx = x / width
+            nz = z / depth
+            h_mod1 = biome1.get_height_mod(nx, nz, seed)
+            h_mod2 = biome2.get_height_mod(nx, nz, seed)
+            result += lerp(h_mod1, h_mod2, blend)
+
             row.append(result)
         heights.append(row)
 
     return heights
-
-
-def generate_tree_map(
-    width: int,
-    depth: int,
-    biome_map: list[list[tuple[Biome, Biome, float]]],
-    seed: int,
-) -> list[list[bool]]:
-    """Generate a 2D tree placement map based on biome density."""
-    tree_map = []
-    for x in range(width):
-        row = []
-        for z in range(depth):
-            biome1, biome2, blend = biome_map[x][z]
-            density = lerp(biome1.tree_density, biome2.tree_density, blend)
-
-            # Use noise for organic clustering
-            n = fractal_noise_2d(
-                x, z, octaves=2, persistence=0.6, scale=0.15, seed=seed + 5000
-            )
-            # Trees appear where noise exceeds threshold based on density
-            threshold = 1.0 - density
-            has_tree = n > threshold and density > 0
-            row.append(has_tree)
-        tree_map.append(row)
-    return tree_map
