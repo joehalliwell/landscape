@@ -172,3 +172,38 @@ def fuzzy_match(input: str, options: list[str], seed: int) -> str:
             f"Could not find option matching '{input}' in: {', '.join(options)}"
         )
     return rand_choice(matching, seed)
+
+
+BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+
+def base58_encode(num: int, length: int | None = None) -> str:
+    """Encode an integer to a Base58 string, optionally padded to a fixed length."""
+    encoded = []
+    base = len(BASE58_ALPHABET)
+
+    if length is not None:
+        for _ in range(length):
+            num, rem = divmod(num, base)
+            encoded.append(BASE58_ALPHABET[rem])
+        if num > 0:
+            raise ValueError(f"Number too large to fit in {length} characters")
+    else:
+        if num == 0:
+            return BASE58_ALPHABET[0]
+        while num > 0:
+            num, rem = divmod(num, base)
+            encoded.append(BASE58_ALPHABET[rem])
+
+    return "".join(reversed(encoded))
+
+
+def base58_decode(s: str) -> int:
+    """Decode a Base58 string to an integer."""
+    base = len(BASE58_ALPHABET)
+    num = 0
+    for char in s:
+        if char not in BASE58_ALPHABET:
+            raise ValueError(f"Invalid Base58 character: {char}")
+        num = num * base + BASE58_ALPHABET.index(char)
+    return num

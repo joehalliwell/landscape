@@ -1,7 +1,7 @@
 """Signature encoding for landscape generation parameters.
 
-A signature is a 12-character hexadecimal string (48 bits) that encodes all
-generation parameters needed to precisely reconstruct a landscape.
+A signature is a compact Base58-encoded string (48 bits) prefixed with 'L'
+that encodes all generation parameters needed to precisely reconstruct a landscape.
 
 Bit allocation:
     Ver (4) | Time (3) | Season (4) | Weather (3) | B1-B5 (4 each) | Seed (14)
@@ -19,7 +19,13 @@ from landscape.atmospheres import (
     Weather,
 )
 from landscape.biomes import BIOMES, Biome, BiomeCode, COMPLEMENTS, PRESETS
-from landscape.utils import fuzzy_match, rand_choice, slugify
+from landscape.utils import (
+    base58_decode,
+    base58_encode,
+    fuzzy_match,
+    rand_choice,
+    slugify,
+)
 
 # Lookup tables for biome name <-> code conversion
 BIOME_NAME_TO_CODE = {name: biome.code for name, biome in BIOMES.items()}
@@ -67,9 +73,10 @@ class GenerateParams:
     VERSION = 0
     MAX_SEED = (1 << 14) - 1  # 16383
     MAX_BIOMES = 5
+    PREFIX = "L"
 
     def encode(self) -> str:
-        """Encode to 12-char hex signature."""
+        """Encode to 'L' prefixed Base58 signature."""
         seed = min(self.seed, self.MAX_SEED)
 
         # Get codes
@@ -90,12 +97,36 @@ class GenerateParams:
             | (slots[4] << 14)
             | seed
         )
-        return f"{value:012X}"
+
+        encoded = base58_encode(value, length=9)
+        return f"{self.PREFIX}{encoded}"
 
     @classmethod
     def decode(cls, signature: str) -> "GenerateParams":
-        """Decode 12-char hex signature to GenerateParams."""
-        value = int(signature, 16)
+        """Decode signature to GenerateParams."""
+        if not signature.startswith(cls.PREFIX):
+            # Fallback for legacy 12-char hex signatures (optional but nice)
+            if len(signature) == 12:
+                try:
+                    int(signature, 16)
+                    # It's hex
+                    value = int(signature, 16)
+                    return cls._from_int_value(value)
+                except ValueError:
+                    pass
+            raise ValueError(f"Signature must start with '{cls.PREFIX}'")
+
+        encoded = signature[len(cls.PREFIX) :]
+        try:
+            value = base58_decode(encoded)
+        except ValueError as e:
+            raise ValueError(f"Invalid signature format: {e}")
+
+        return cls._from_int_value(value)
+
+    @classmethod
+    def _from_int_value(cls, value: int) -> "GenerateParams":
+        """Internal helper to create params from the integer value."""
         version = (value >> 44) & 0xF
         if version != cls.VERSION:
             raise ValueError(

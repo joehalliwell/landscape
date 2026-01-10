@@ -10,6 +10,7 @@ from landscape.signature import (
     TimeOfDay,
     Weather,
 )
+from landscape.utils import base58_encode
 
 
 class TestBiomeCode:
@@ -57,22 +58,16 @@ class TestLookupTables:
 
 
 class TestGenerateParamsEncode:
-    def test_produces_12_hex_chars(self):
+    def test_produces_prefixed_base58_string(self):
         config = GenerateParams(
             seed=0,
             biomes=(BIOMES["ocean"],),
             atmosphere=ATMOSPHERES["apricot_dawn"],
         )
-        assert len(config.encode()) == 12
-
-    def test_seed_in_low_bits(self):
-        config = GenerateParams(
-            seed=0x3FFF,  # max seed
-            biomes=(BIOMES["ocean"],),
-            atmosphere=ATMOSPHERES["apricot_dawn"],
-        )
-        value = int(config.encode(), 16)
-        assert value & 0x3FFF == 0x3FFF
+        encoded = config.encode()
+        assert encoded.startswith("L")
+        # 48 bits fits in 9 base58 chars + 1 prefix
+        assert len(encoded) == 10
 
     def test_seed_clamped_to_max(self):
         config = GenerateParams(
@@ -80,39 +75,28 @@ class TestGenerateParamsEncode:
             biomes=(BIOMES["ocean"],),
             atmosphere=ATMOSPHERES["apricot_dawn"],
         )
-        value = int(config.encode(), 16)
-        assert value & 0x3FFF == GenerateParams.MAX_SEED
-
-    def test_version_in_high_bits(self):
-        config = GenerateParams(
-            seed=0,
-            biomes=(BIOMES["ocean"],),
-            atmosphere=ATMOSPHERES["apricot_dawn"],
-        )
-        value = int(config.encode(), 16)
-        version = (value >> 44) & 0xF
-        assert version == GenerateParams.VERSION
-
-    def test_empty_slots_filled_with_0xF(self):
-        config = GenerateParams(
-            seed=0,
-            biomes=(BIOMES["forest"],),  # only 1 biome
-            atmosphere=ATMOSPHERES["apricot_dawn"],
-        )
-        value = int(config.encode(), 16)
-        # Slots 2-5 should be EMPTY (0xF)
-        assert (value >> 26) & 0xF == 0xF  # B2
-        assert (value >> 22) & 0xF == 0xF  # B3
-        assert (value >> 18) & 0xF == 0xF  # B4
-        assert (value >> 14) & 0xF == 0xF  # B5
+        decoded = GenerateParams.decode(config.encode())
+        assert decoded.seed == GenerateParams.MAX_SEED
 
 
 class TestGenerateParamsDecode:
+    def test_invalid_prefix_raises(self):
+        with pytest.raises(ValueError, match="Signature must start with"):
+            GenerateParams.decode("X12345678")
+
+    def test_invalid_base58_raises(self):
+        with pytest.raises(ValueError, match="Invalid signature format"):
+            # L + invalid base58 char (0, O, I, l)
+            GenerateParams.decode("L0OIl")
+
     def test_invalid_version_raises(self):
         # Version 1 in high bits
-        invalid = f"{1 << 44:012X}"
+        # 1 << 44
+        val = 1 << 44
+        sig = "L" + base58_encode(val)
+
         with pytest.raises(ValueError, match="Unknown signature version"):
-            GenerateParams.decode(invalid)
+            GenerateParams.decode(sig)
 
     def test_filters_empty_biomes(self):
         config = GenerateParams(

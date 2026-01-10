@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import IntEnum
+from functools import cached_property
 from typing import Callable
 
 from landscape.textures import Detail, Texture
@@ -57,9 +58,13 @@ class Atmosphere(Texture):
     weather: Weather = Weather.CLEAR
     filter: Callable[[float, float, float, RGB], RGB] | None = None
 
+    @cached_property
+    def slug(self):
+        return slugify(self.name)
+
 
 ATMOSPHERES = {
-    slugify(a.name): a
+    a.slug: a
     for a in [
         Atmosphere(
             name="Clear day",
