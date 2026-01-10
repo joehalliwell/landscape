@@ -1,13 +1,30 @@
 from dataclasses import dataclass, field
+from enum import IntEnum
 
 from landscape.textures import Detail, Texture
 from landscape.utils import RGB, Colormap, cmap
+
+
+class BiomeCode(IntEnum):
+    """Biome codes for signature encoding."""
+
+    OCEAN = 0
+    FOREST = 1
+    MOUNTAINS = 2
+    JUNGLE = 3
+    ICE = 4
+    PLAINS = 5
+    DESERT = 6
+    ALPINE = 7
+    # 8-14 reserved for future biomes
+    EMPTY = 15  # Slot unused
 
 
 @dataclass(kw_only=True)
 class Biome(Texture):
     """Defines a landscape biome with colors and terrain properties."""
 
+    code: BiomeCode
     name: str = "Anonymous"
 
     # Terrain generation parameters
@@ -37,6 +54,7 @@ class Biome(Texture):
 
 BIOMES = {
     "ocean": Biome(
+        code=BiomeCode.OCEAN,
         name="Ocean",
         color_map=cmap("#002F4F", "#005c7e"),
         roughness=0.2,
@@ -54,6 +72,7 @@ BIOMES = {
         ],
     ),
     "forest": Biome(
+        code=BiomeCode.FOREST,
         name="Forest",
         color_map=cmap("#002800", "#086200"),
         roughness=0.1,
@@ -62,6 +81,7 @@ BIOMES = {
         tree_density=0.7,
     ),
     "mountains": Biome(
+        code=BiomeCode.MOUNTAINS,
         name="Mountains",
         color_map=cmap("#383838", "#ffffff"),  # Snowy peaks / sky
         roughness=0.8,
@@ -96,6 +116,7 @@ BIOMES = {
         ],
     ),
     "jungle": Biome(
+        code=BiomeCode.JUNGLE,
         name="Jungle",
         color_map=cmap("#56971D", "#21410d"),
         roughness=0.6,
@@ -127,6 +148,7 @@ BIOMES = {
         ],
     ),
     "ice": Biome(
+        code=BiomeCode.ICE,
         name="Ice",
         color_map=cmap("#b3c3f4", "#f0faff"),
         roughness=0.4,
@@ -144,6 +166,7 @@ BIOMES = {
         ],
     ),
     "plains": Biome(
+        code=BiomeCode.PLAINS,
         name="Plains",
         color_map=cmap("#489c33", "#73A400"),
         roughness=0.2,
@@ -161,6 +184,7 @@ BIOMES = {
         ],
     ),
     "desert": Biome(
+        code=BiomeCode.DESERT,
         name="Desert",
         color_map=cmap("#aa8266", "#ffedd3"),
         roughness=0.3,
@@ -178,6 +202,7 @@ BIOMES = {
         ],
     ),
     "alpine": Biome(
+        code=BiomeCode.ALPINE,
         name="Alpine Forest",
         color_map=cmap("#333C31", "#748372"),
         roughness=0.7,
@@ -189,3 +214,28 @@ BIOMES = {
 
 # Tree characters - triangular shapes
 TREE_CHARS = ["△", "▲", "▴", "◭", "◮"]
+
+
+# Predefined multi-biome combinations (near -> far)
+PRESETS = {
+    "coastal": ["ocean", "plains", "forest", "plains"],
+    "mountain_valley": ["plains", "forest", "mountains"],
+    "alpine_lake": ["ocean", "alpine", "mountains"],
+    "tropical": ["ocean", "jungle", "forest"],
+    "arctic": ["ocean", "ice", "ocean", "ice"],
+    "desert_oasis": ["desert", "mountains"],
+    "fjord": ["ocean", "mountains"],
+    "highlands": ["plains", "alpine", "mountains"],
+    "tropical_island": ["ocean", "jungle", "ocean"],
+}
+
+COMPLEMENTS = {
+    "ocean": ["plains", "forest"],
+    "forest": ["plains", "mountains"],
+    "mountains": ["alpine", "forest"],
+    "jungle": ["ocean", "plains"],
+    "ice": ["ocean", "mountains"],
+    "plains": ["forest", "mountains"],
+    "desert": ["plains", "mountains"],
+    "alpine": ["mountains", "forest"],
+}

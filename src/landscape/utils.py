@@ -154,3 +154,13 @@ def clear_console():
     "Clear the screen"
     print("\033[0;0H", end="")  # Move cursor
     print("\033[2J", end="")  # Clear screen
+
+
+def fuzzy_match(input: str, options: list[str], seed: int) -> str:
+    input = slugify(input)
+    matching = [option for option in options if input in option]
+    if len(matching) == 0:
+        raise ValueError(
+            f"Could not find option matching '{input}' in: {', '.join(options)}"
+        )
+    return rand_choice(matching, seed)

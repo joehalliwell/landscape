@@ -1,5 +1,42 @@
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+from landscape.atmospheres import Atmosphere
 from landscape.biomes import Biome
 from landscape.utils import fractal_noise_2d, lerp
+
+if TYPE_CHECKING:
+    from landscape.signature import GenerateParams
+
+
+@dataclass
+class GeneratedLandscape:
+    width: int
+    depth: int
+    biome_map: list[list[tuple[Biome, Biome, float]]]
+    height_map: list[list[float]]
+    tree_map: list[list[bool]]
+    atmosphere: Atmosphere
+    seed: int
+
+
+def generate(
+    config: "GenerateParams", width: int, depth: int, max_height: int
+) -> GeneratedLandscape:
+    """Generate a complete landscape from configuration."""
+    biome_map = generate_biome_map(width, depth, list(config.biomes), config.seed)
+    tree_map = generate_tree_map(width, depth, biome_map, config.seed)
+    height_map = generate_height_map(width, depth, max_height, biome_map, config.seed)
+
+    return GeneratedLandscape(
+        width=width,
+        depth=depth,
+        biome_map=biome_map,
+        height_map=height_map,
+        tree_map=tree_map,
+        atmosphere=config.atmosphere,
+        seed=config.seed,
+    )
 
 
 def generate_biome_map(

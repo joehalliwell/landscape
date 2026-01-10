@@ -1,13 +1,15 @@
 import random
 import shutil
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, TYPE_CHECKING
 
 from cyclopts import Parameter
 
-from landscape.atmospheres import Atmosphere
 from landscape.biomes import TREE_CHARS, Biome
 from landscape.utils import RGB, clamp, lerp, lerp_color, noise_2d, rgb
+
+if TYPE_CHECKING:
+    from landscape.generation import GeneratedLandscape
 
 TERM_SIZE = shutil.get_terminal_size((120, 30))
 DEFAULT_WIDTH = TERM_SIZE.columns
@@ -45,19 +47,22 @@ def rgb_to_ansi_fg_bg(fg: tuple[int, int, int], bg: tuple[int, int, int]) -> str
 RESET = "\033[m"
 
 
-def render_with_depth(
+def render(
+    landscape: "GeneratedLandscape",
     render_params: RenderParams,
-    height_map: list[list[float]],
-    biome_map: list[list[tuple[Biome, Biome, float]]],
-    tree_map: list[list[bool]],
-    atmosphere: Atmosphere,
-    seed,
     show_landscape=True,
+    signature: str | None = None,
 ) -> None:
     """Render 2D heightmap with depth shading and oblique projection.
 
     oblique: how much to shift y per z unit (0 = front view, 1 = steep oblique)
     """
+    height_map = landscape.height_map
+    biome_map = landscape.biome_map
+    tree_map = landscape.tree_map
+    atmosphere = landscape.atmosphere
+    seed = landscape.seed
+
     depth_buffer = make_depth_buffer(render_params, height_map)
 
     width, screen_height = render_params.width, render_params.height
@@ -193,6 +198,15 @@ def render_with_depth(
                 fg = atmosphere.filter(x, z, y, fg)
                 bg = atmosphere.filter(x, z, y, bg)
             rows[y][x] = (cell[0], fg, bg)
+
+    if signature:
+        # Overlay signature in bottom right
+        sig_text = f" {signature} "
+        for i, char in enumerate(sig_text):
+            idx = width - len(sig_text) + i
+            if 0 <= idx < width:
+                current = rows[0][idx]
+                rows[0][idx] = (char, rgb("#ffffff"), current[2])
 
     _render_rows(rows)
 

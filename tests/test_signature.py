@@ -1,11 +1,11 @@
 import pytest
 
+from landscape.atmospheres import ATMOSPHERES
+from landscape.biomes import BIOMES, BiomeCode
 from landscape.signature import (
-    ATMO_TO_COMPONENTS,
     BIOME_CODE_TO_NAME,
     BIOME_NAME_TO_CODE,
-    BiomeCode,
-    GenerationConfig,
+    GenerateParams,
     Season,
     TimeOfDay,
     Weather,
@@ -56,58 +56,48 @@ class TestLookupTables:
             assert BIOME_CODE_TO_NAME[code] == name
 
 
-class TestGenerationConfigEncode:
+class TestGenerateParamsEncode:
     def test_produces_12_hex_chars(self):
-        config = GenerationConfig(
+        config = GenerateParams(
             seed=0,
-            biomes=(BiomeCode.OCEAN,),
-            time_of_day=TimeOfDay.DAWN,
-            season=Season.EARLY_SPRING,
-            weather=Weather.CLEAR,
+            biomes=(BIOMES["ocean"],),
+            atmosphere=ATMOSPHERES["apricot_dawn"],
         )
         assert len(config.encode()) == 12
 
     def test_seed_in_low_bits(self):
-        config = GenerationConfig(
+        config = GenerateParams(
             seed=0x3FFF,  # max seed
-            biomes=(BiomeCode.OCEAN,),
-            time_of_day=TimeOfDay.DAWN,
-            season=Season.EARLY_SPRING,
-            weather=Weather.CLEAR,
+            biomes=(BIOMES["ocean"],),
+            atmosphere=ATMOSPHERES["apricot_dawn"],
         )
         value = int(config.encode(), 16)
         assert value & 0x3FFF == 0x3FFF
 
     def test_seed_clamped_to_max(self):
-        config = GenerationConfig(
+        config = GenerateParams(
             seed=99999,  # exceeds MAX_SEED
-            biomes=(BiomeCode.OCEAN,),
-            time_of_day=TimeOfDay.DAWN,
-            season=Season.EARLY_SPRING,
-            weather=Weather.CLEAR,
+            biomes=(BIOMES["ocean"],),
+            atmosphere=ATMOSPHERES["apricot_dawn"],
         )
         value = int(config.encode(), 16)
-        assert value & 0x3FFF == GenerationConfig.MAX_SEED
+        assert value & 0x3FFF == GenerateParams.MAX_SEED
 
     def test_version_in_high_bits(self):
-        config = GenerationConfig(
+        config = GenerateParams(
             seed=0,
-            biomes=(BiomeCode.OCEAN,),
-            time_of_day=TimeOfDay.DAWN,
-            season=Season.EARLY_SPRING,
-            weather=Weather.CLEAR,
+            biomes=(BIOMES["ocean"],),
+            atmosphere=ATMOSPHERES["apricot_dawn"],
         )
         value = int(config.encode(), 16)
         version = (value >> 44) & 0xF
-        assert version == GenerationConfig.VERSION
+        assert version == GenerateParams.VERSION
 
     def test_empty_slots_filled_with_0xF(self):
-        config = GenerationConfig(
+        config = GenerateParams(
             seed=0,
-            biomes=(BiomeCode.FOREST,),  # only 1 biome
-            time_of_day=TimeOfDay.DAWN,
-            season=Season.EARLY_SPRING,
-            weather=Weather.CLEAR,
+            biomes=(BIOMES["forest"],),  # only 1 biome
+            atmosphere=ATMOSPHERES["apricot_dawn"],
         )
         value = int(config.encode(), 16)
         # Slots 2-5 should be EMPTY (0xF)
@@ -117,183 +107,107 @@ class TestGenerationConfigEncode:
         assert (value >> 14) & 0xF == 0xF  # B5
 
 
-class TestGenerationConfigDecode:
+class TestGenerateParamsDecode:
     def test_invalid_version_raises(self):
         # Version 1 in high bits
         invalid = f"{1 << 44:012X}"
         with pytest.raises(ValueError, match="Unknown signature version"):
-            GenerationConfig.decode(invalid)
+            GenerateParams.decode(invalid)
 
     def test_filters_empty_biomes(self):
-        config = GenerationConfig(
+        config = GenerateParams(
             seed=100,
-            biomes=(BiomeCode.OCEAN, BiomeCode.ICE),
-            time_of_day=TimeOfDay.NOON,
-            season=Season.MID_SUMMER,
-            weather=Weather.CLEAR,
+            biomes=(BIOMES["ocean"], BIOMES["ice"]),
+            atmosphere=ATMOSPHERES["clear_day"],
         )
-        decoded = GenerationConfig.decode(config.encode())
+        decoded = GenerateParams.decode(config.encode())
         assert len(decoded.biomes) == 2
-        assert BiomeCode.EMPTY not in decoded.biomes
+        assert decoded.biomes == config.biomes
 
 
 class TestRoundTrip:
     @pytest.mark.parametrize("seed", [0, 1, 100, 12345, 16383])
     def test_seed_round_trips(self, seed):
-        config = GenerationConfig(
+        config = GenerateParams(
             seed=seed,
-            biomes=(BiomeCode.OCEAN,),
-            time_of_day=TimeOfDay.DAWN,
-            season=Season.EARLY_SPRING,
-            weather=Weather.CLEAR,
+            biomes=(BIOMES["ocean"],),
+            atmosphere=ATMOSPHERES["apricot_dawn"],
         )
-        decoded = GenerationConfig.decode(config.encode())
+        decoded = GenerateParams.decode(config.encode())
         assert decoded.seed == seed
 
     @pytest.mark.parametrize(
         "biomes",
         [
-            (BiomeCode.OCEAN,),
-            (BiomeCode.FOREST, BiomeCode.MOUNTAINS),
-            (BiomeCode.OCEAN, BiomeCode.ICE, BiomeCode.OCEAN),
-            (BiomeCode.OCEAN, BiomeCode.ICE, BiomeCode.OCEAN, BiomeCode.ICE),
+            (BIOMES["ocean"],),
+            (BIOMES["forest"], BIOMES["mountains"]),
+            (BIOMES["ocean"], BIOMES["ice"], BIOMES["ocean"]),
+            (BIOMES["ocean"], BIOMES["ice"], BIOMES["ocean"], BIOMES["ice"]),
             (
-                BiomeCode.PLAINS,
-                BiomeCode.FOREST,
-                BiomeCode.MOUNTAINS,
-                BiomeCode.ALPINE,
-                BiomeCode.ICE,
+                BIOMES["plains"],
+                BIOMES["forest"],
+                BIOMES["mountains"],
+                BIOMES["alpine"],
+                BIOMES["ice"],
             ),
         ],
     )
     def test_biomes_round_trip(self, biomes):
-        config = GenerationConfig(
+        config = GenerateParams(
             seed=42,
             biomes=biomes,
-            time_of_day=TimeOfDay.NOON,
-            season=Season.MID_SUMMER,
-            weather=Weather.CLEAR,
+            atmosphere=ATMOSPHERES["clear_day"],
         )
-        decoded = GenerationConfig.decode(config.encode())
+        decoded = GenerateParams.decode(config.encode())
         assert decoded.biomes == biomes
 
-    @pytest.mark.parametrize("time", list(TimeOfDay))
-    def test_time_of_day_round_trips(self, time):
-        config = GenerationConfig(
+    @pytest.mark.parametrize("atmosphere", list(ATMOSPHERES.values()))
+    def test_atmosphere_round_trips(self, atmosphere):
+        config = GenerateParams(
             seed=0,
-            biomes=(BiomeCode.OCEAN,),
-            time_of_day=time,
-            season=Season.EARLY_SPRING,
-            weather=Weather.CLEAR,
+            biomes=(BIOMES["ocean"],),
+            atmosphere=atmosphere,
         )
-        decoded = GenerationConfig.decode(config.encode())
-        assert decoded.time_of_day == time
-
-    @pytest.mark.parametrize("season", list(Season))
-    def test_season_round_trips(self, season):
-        config = GenerationConfig(
-            seed=0,
-            biomes=(BiomeCode.OCEAN,),
-            time_of_day=TimeOfDay.DAWN,
-            season=season,
-            weather=Weather.CLEAR,
-        )
-        decoded = GenerationConfig.decode(config.encode())
-        assert decoded.season == season
-
-    @pytest.mark.parametrize("weather", list(Weather))
-    def test_weather_round_trips(self, weather):
-        config = GenerationConfig(
-            seed=0,
-            biomes=(BiomeCode.OCEAN,),
-            time_of_day=TimeOfDay.DAWN,
-            season=Season.EARLY_SPRING,
-            weather=weather,
-        )
-        decoded = GenerationConfig.decode(config.encode())
-        assert decoded.weather == weather
+        decoded = GenerateParams.decode(config.encode())
+        # Note: multiple atmospheres might share components, so we check components
+        assert decoded.atmosphere.time == atmosphere.time
+        assert decoded.atmosphere.season == atmosphere.season
+        assert decoded.atmosphere.weather == atmosphere.weather
 
 
 class TestFromParams:
     def test_converts_biome_names(self):
-        config = GenerationConfig.from_params(
+        config = GenerateParams.from_params(
             seed=100,
             biome_names=["ocean", "forest"],
             atmosphere_name="clear_day",
         )
-        assert config.biomes == (BiomeCode.OCEAN, BiomeCode.FOREST)
+        assert config.biomes == (BIOMES["ocean"], BIOMES["forest"])
 
-    def test_maps_atmosphere_to_components(self):
-        config = GenerationConfig.from_params(
+    def test_maps_atmosphere_to_object(self):
+        config = GenerateParams.from_params(
             seed=100,
             biome_names=["ocean"],
             atmosphere_name="apricot_dawn",
         )
-        expected = ATMO_TO_COMPONENTS["apricot_dawn"]
-        assert config.time_of_day == expected[0]
-        assert config.season == expected[1]
-        assert config.weather == expected[2]
-
-    def test_unknown_atmosphere_defaults(self):
-        config = GenerationConfig.from_params(
-            seed=100,
-            biome_names=["ocean"],
-            atmosphere_name="unknown_atmosphere",
-        )
-        assert config.time_of_day == TimeOfDay.NOON
-        assert config.season == Season.MID_SUMMER
-        assert config.weather == Weather.CLEAR
+        assert config.atmosphere == ATMOSPHERES["apricot_dawn"]
 
 
 class TestToBiomeNames:
-    def test_converts_codes_to_names(self):
-        config = GenerationConfig(
+    def test_converts_objects_to_names(self):
+        config = GenerateParams(
             seed=0,
-            biomes=(BiomeCode.OCEAN, BiomeCode.MOUNTAINS, BiomeCode.ALPINE),
-            time_of_day=TimeOfDay.DAWN,
-            season=Season.EARLY_SPRING,
-            weather=Weather.CLEAR,
+            biomes=(BIOMES["ocean"], BIOMES["mountains"], BIOMES["alpine"]),
+            atmosphere=ATMOSPHERES["apricot_dawn"],
         )
         assert config.to_biome_names() == ["ocean", "mountains", "alpine"]
 
 
 class TestToAtmosphereName:
     def test_exact_match(self):
-        config = GenerationConfig(
+        config = GenerateParams(
             seed=0,
-            biomes=(BiomeCode.OCEAN,),
-            time_of_day=TimeOfDay.NOON,
-            season=Season.MID_SUMMER,
-            weather=Weather.CLEAR,
+            biomes=(BIOMES["ocean"],),
+            atmosphere=ATMOSPHERES["clear_day"],
         )
         assert config.to_atmosphere_name() == "clear_day"
-
-    def test_night_fallback(self):
-        config = GenerationConfig(
-            seed=0,
-            biomes=(BiomeCode.OCEAN,),
-            time_of_day=TimeOfDay.LATE_NIGHT,
-            season=Season.EARLY_WINTER,
-            weather=Weather.FOGGY,
-        )
-        assert config.to_atmosphere_name() == "clear_night"
-
-    def test_dawn_fallback(self):
-        config = GenerationConfig(
-            seed=0,
-            biomes=(BiomeCode.OCEAN,),
-            time_of_day=TimeOfDay.DAWN,
-            season=Season.LATE_AUTUMN,
-            weather=Weather.CLOUDY,
-        )
-        assert config.to_atmosphere_name() == "apricot_dawn"
-
-    def test_stormy_dusk_matches_ominous(self):
-        config = GenerationConfig(
-            seed=0,
-            biomes=(BiomeCode.OCEAN,),
-            time_of_day=TimeOfDay.DUSK,
-            season=Season.LATE_AUTUMN,
-            weather=Weather.STORMY,
-        )
-        assert config.to_atmosphere_name() == "ominous_sunset"

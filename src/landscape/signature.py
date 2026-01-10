@@ -8,100 +8,61 @@ Bit allocation:
     47-44   | 43-41    | 40-37      | 36-34       | 33-14          | 13-0
 """
 
+import random
 from dataclasses import dataclass
-from enum import IntEnum
 
-
-class BiomeCode(IntEnum):
-    """Biome codes for signature encoding."""
-
-    OCEAN = 0
-    FOREST = 1
-    MOUNTAINS = 2
-    JUNGLE = 3
-    ICE = 4
-    PLAINS = 5
-    DESERT = 6
-    ALPINE = 7
-    # 8-14 reserved for future biomes
-    EMPTY = 15  # Slot unused
-
-
-class TimeOfDay(IntEnum):
-    """Time of day codes (3 bits)."""
-
-    DAWN = 0
-    MORNING = 1
-    NOON = 2
-    AFTERNOON = 3
-    DUSK = 4
-    EVENING = 5
-    NIGHT = 6
-    LATE_NIGHT = 7
-
-
-class Season(IntEnum):
-    """Season codes (4 bits)."""
-
-    EARLY_SPRING = 0
-    MID_SPRING = 1
-    LATE_SPRING = 2
-    EARLY_SUMMER = 3
-    MID_SUMMER = 4
-    LATE_SUMMER = 5
-    EARLY_AUTUMN = 6
-    MID_AUTUMN = 7
-    LATE_AUTUMN = 8
-    EARLY_WINTER = 9
-    MID_WINTER = 10
-    LATE_WINTER = 11
-    # 12-15 reserved
-
-
-class Weather(IntEnum):
-    """Weather condition codes (3 bits)."""
-
-    CLEAR = 0
-    PARTLY_CLOUDY = 1
-    CLOUDY = 2
-    FOGGY = 3
-    RAINY = 4
-    STORMY = 5
-    # 6-7 reserved
-
+from landscape.atmospheres import (
+    ATMOSPHERES,
+    Atmosphere,
+    Season,
+    TimeOfDay,
+    Weather,
+)
+from landscape.biomes import BIOMES, Biome, BiomeCode, COMPLEMENTS, PRESETS
+from landscape.utils import fuzzy_match, rand_choice, slugify
 
 # Lookup tables for biome name <-> code conversion
-BIOME_NAME_TO_CODE = {
-    "ocean": BiomeCode.OCEAN,
-    "forest": BiomeCode.FOREST,
-    "mountains": BiomeCode.MOUNTAINS,
-    "jungle": BiomeCode.JUNGLE,
-    "ice": BiomeCode.ICE,
-    "plains": BiomeCode.PLAINS,
-    "desert": BiomeCode.DESERT,
-    "alpine": BiomeCode.ALPINE,
-}
-BIOME_CODE_TO_NAME = {v: k for k, v in BIOME_NAME_TO_CODE.items()}
+BIOME_NAME_TO_CODE = {name: biome.code for name, biome in BIOMES.items()}
+BIOME_CODE_TO_NAME = {biome.code: name for name, biome in BIOMES.items()}
 
 # Map current atmospheres to (time, season, weather) components
 ATMO_TO_COMPONENTS = {
-    "clear_day": (TimeOfDay.NOON, Season.MID_SUMMER, Weather.CLEAR),
-    "clear_night": (TimeOfDay.NIGHT, Season.MID_SUMMER, Weather.CLEAR),
-    "apricot_dawn": (TimeOfDay.DAWN, Season.MID_SUMMER, Weather.CLEAR),
-    "ominous_sunset": (TimeOfDay.DUSK, Season.LATE_AUTUMN, Weather.STORMY),
+    slug: (atmo.time, atmo.season, atmo.weather) for slug, atmo in ATMOSPHERES.items()
 }
 COMPONENTS_TO_ATMO = {v: k for k, v in ATMO_TO_COMPONENTS.items()}
 
 
+def _resolve_atmosphere(
+    time: TimeOfDay, season: Season, weather: Weather
+) -> Atmosphere:
+    """Find the best matching Atmosphere object for the given components."""
+    key = (time, season, weather)
+    if key in COMPONENTS_TO_ATMO:
+        return ATMOSPHERES[COMPONENTS_TO_ATMO[key]]
+
+    # Fallback: find closest match based on time of day
+    if time in (TimeOfDay.NIGHT, TimeOfDay.LATE_NIGHT):
+        name = "clear_night"
+    elif time == TimeOfDay.DAWN:
+        name = "apricot_dawn"
+    elif time in (TimeOfDay.DUSK, TimeOfDay.EVENING):
+        if weather == Weather.STORMY:
+            name = "ominous_sunset"
+        else:
+            name = "apricot_dawn"  # Closest match for dusk
+    else:
+        name = "clear_day"
+
+    return ATMOSPHERES[name]
+
+
 @dataclass
-class GenerationConfig:
+class GenerateParams:
     """Encapsulates all generation parameters with encode/decode capability."""
 
     seed: int
-    biomes: tuple[BiomeCode, ...]  # Up to 5 biomes, near to far
-    time_of_day: TimeOfDay
-    season: Season
-    weather: Weather
+    biomes: tuple[Biome, ...]  # Up to 5 biomes, near to far
+    atmosphere: Atmosphere
 
     VERSION = 0
     MAX_SEED = (1 << 14) - 1  # 16383
@@ -110,13 +71,18 @@ class GenerationConfig:
     def encode(self) -> str:
         """Encode to 12-char hex signature."""
         seed = min(self.seed, self.MAX_SEED)
+
+        # Get codes
+        biome_codes = [b.code for b in self.biomes]
+
         # Pad biomes to 5 slots with EMPTY
-        slots = list(self.biomes) + [BiomeCode.EMPTY] * (5 - len(self.biomes))
+        slots = biome_codes + [BiomeCode.EMPTY] * (5 - len(biome_codes))
+
         value = (
             (self.VERSION << 44)
-            | (self.time_of_day << 41)
-            | (self.season << 37)
-            | (self.weather << 34)
+            | (self.atmosphere.time << 41)
+            | (self.atmosphere.season << 37)
+            | (self.atmosphere.weather << 34)
             | (slots[0] << 30)
             | (slots[1] << 26)
             | (slots[2] << 22)
@@ -127,8 +93,8 @@ class GenerationConfig:
         return f"{value:012X}"
 
     @classmethod
-    def decode(cls, signature: str) -> "GenerationConfig":
-        """Decode 12-char hex signature to GenerationConfig."""
+    def decode(cls, signature: str) -> "GenerateParams":
+        """Decode 12-char hex signature to GenerateParams."""
         value = int(signature, 16)
         version = (value >> 44) & 0xF
         if version != cls.VERSION:
@@ -136,7 +102,8 @@ class GenerationConfig:
                 f"Unknown signature version {version}. "
                 "Please update landscape to decode this signature."
             )
-        # Extract biome slots, filter out EMPTY
+
+        # Extract biome slots
         slots = [
             BiomeCode((value >> 30) & 0xF),
             BiomeCode((value >> 26) & 0xF),
@@ -144,13 +111,25 @@ class GenerationConfig:
             BiomeCode((value >> 18) & 0xF),
             BiomeCode((value >> 14) & 0xF),
         ]
-        biomes = tuple(b for b in slots if b != BiomeCode.EMPTY)
+
+        # Convert codes back to Biome objects
+        biomes = tuple(
+            BIOMES[BIOME_CODE_TO_NAME[code]]
+            for code in slots
+            if code != BiomeCode.EMPTY
+        )
+
+        # Extract atmosphere components
+        time = TimeOfDay((value >> 41) & 0x7)
+        season = Season((value >> 37) & 0xF)
+        weather = Weather((value >> 34) & 0x7)
+
+        atmosphere = _resolve_atmosphere(time, season, weather)
+
         return cls(
             seed=(value & 0x3FFF),
             biomes=biomes,
-            time_of_day=TimeOfDay((value >> 41) & 0x7),
-            season=Season((value >> 37) & 0xF),
-            weather=Weather((value >> 34) & 0x7),
+            atmosphere=atmosphere,
         )
 
     @classmethod
@@ -159,38 +138,65 @@ class GenerationConfig:
         seed: int,
         biome_names: list[str],
         atmosphere_name: str,
-    ) -> "GenerationConfig":
+    ) -> "GenerateParams":
         """Create from resolved parameter names."""
-        biome_codes = tuple(BIOME_NAME_TO_CODE[name] for name in biome_names)
-        time, season, weather = ATMO_TO_COMPONENTS.get(
-            atmosphere_name,
-            (TimeOfDay.NOON, Season.MID_SUMMER, Weather.CLEAR),
-        )
+        biomes = tuple(BIOMES[name] for name in biome_names)
+        atmosphere = ATMOSPHERES[slugify(atmosphere_name)]
         return cls(
             seed=seed,
-            biomes=biome_codes,
-            time_of_day=time,
-            season=season,
-            weather=weather,
+            biomes=biomes,
+            atmosphere=atmosphere,
         )
 
-    def to_atmosphere_name(self) -> str:
-        """Get the closest matching atmosphere name for current components."""
-        key = (self.time_of_day, self.season, self.weather)
-        if key in COMPONENTS_TO_ATMO:
-            return COMPONENTS_TO_ATMO[key]
-        # Fallback: find closest match based on time of day
-        if self.time_of_day in (TimeOfDay.NIGHT, TimeOfDay.LATE_NIGHT):
-            return "clear_night"
-        elif self.time_of_day == TimeOfDay.DAWN:
-            return "apricot_dawn"
-        elif self.time_of_day in (TimeOfDay.DUSK, TimeOfDay.EVENING):
-            if self.weather == Weather.STORMY:
-                return "ominous_sunset"
-            return "apricot_dawn"  # Closest match for dusk
+    @classmethod
+    def from_runtime_args(
+        cls,
+        preset_name: str | None = None,
+        seed: int | None = None,
+        biome_names: list[str] = [],
+        atmosphere_name: str | None = None,
+        signature: str | None = None,
+    ) -> "GenerateParams":
+        """Resolve all runtime arguments into a config."""
+        if signature:
+            return cls.decode(signature)
+
+        if seed is None:
+            seed = random.randint(0, 100000)
+
+        # If neither biomes nor preset specified, pick a random preset
+        if not biome_names:
+            preset_name = (
+                fuzzy_match(preset_name, list(PRESETS), seed)
+                if preset_name is not None
+                else rand_choice(list(PRESETS), seed)
+            )
+
+        if preset_name and not biome_names:
+            biome_names = PRESETS[preset_name]
+            if atmosphere_name is None:
+                atmosphere_name = rand_choice(list(ATMOSPHERES), seed)
+
+        # Resolve biome names
+        biome_names = [fuzzy_match(name, list(BIOMES), seed) for name in biome_names]
+
+        if len(biome_names) == 1:
+            # Single biome specified - pair with a complementary one
+            partner = rand_choice(COMPLEMENTS[biome_names[0]], seed)
+            biome_names.append(partner)
+
+        # Resolve atmosphere
+        if atmosphere_name is None:
+            atmosphere_name = rand_choice(list(ATMOSPHERES), seed)
         else:
-            return "clear_day"
+            atmosphere_name = fuzzy_match(atmosphere_name, list(ATMOSPHERES), seed)
+
+        return cls.from_params(seed, biome_names, atmosphere_name)
+
+    def to_atmosphere_name(self) -> str:
+        """Get the atmosphere name."""
+        return slugify(self.atmosphere.name)
 
     def to_biome_names(self) -> list[str]:
-        """Convert biome codes to names."""
-        return [BIOME_CODE_TO_NAME[b] for b in self.biomes]
+        """Get the biome names."""
+        return [BIOME_CODE_TO_NAME[b.code] for b in self.biomes]
