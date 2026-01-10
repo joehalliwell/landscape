@@ -5,7 +5,12 @@ from typing import Annotated
 
 from cyclopts import App, Group, Parameter
 
-from landscape.atmospheres import ATMOSPHERES
+from landscape.atmospheres import (
+    ATMOSPHERE_PRESETS,
+    Season,
+    TimeOfDay,
+    Weather,
+)
 from landscape.biomes import BIOMES, PRESETS
 from landscape.generation import generate
 from landscape.rendering import (
@@ -87,7 +92,31 @@ def main(
         str | None,
         Parameter(
             name=["--atmosphere", "-a"],
-            help=f"Specify atmosphere. Options: {', '.join(ATMOSPHERES)}.",
+            help=f"Specify atmosphere preset. Options: {', '.join(ATMOSPHERE_PRESETS)}.",
+            group=GENERATION_GROUP,
+        ),
+    ] = None,
+    time_of_day: Annotated[
+        str | None,
+        Parameter(
+            name=["--time", "-t"],
+            help=f"Time of day. Options: {', '.join(t.name.lower() for t in TimeOfDay)}.",
+            group=GENERATION_GROUP,
+        ),
+    ] = None,
+    season: Annotated[
+        str | None,
+        Parameter(
+            name=["--season"],
+            help=f"Season. Options: {', '.join(s.name.lower() for s in Season)}.",
+            group=GENERATION_GROUP,
+        ),
+    ] = None,
+    weather: Annotated[
+        str | None,
+        Parameter(
+            name=["--weather"],
+            help=f"Weather. Options: {', '.join(w.name.lower() for w in Weather)}.",
             group=GENERATION_GROUP,
         ),
     ] = None,
@@ -111,6 +140,9 @@ def main(
             seed=seed,
             biome_names=biome_names,
             atmosphere_name=atmosphere_name,
+            time_of_day=time_of_day,
+            season=season,
+            weather=weather,
             signature=signature,
         )
 

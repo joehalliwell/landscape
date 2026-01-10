@@ -6,6 +6,7 @@ from typing import Callable
 from landscape.textures import Detail, Texture
 from landscape.utils import (
     RGB,
+    Colormap,
     clamp_col,
     cmap,
     lerp_color,
@@ -137,159 +138,239 @@ class RainyAtmosphere(Atmosphere):
         return new_char, lerp_color(self.rain_color, fg, p), bg
 
 
-ATMOSPHERES = {
-    a.slug: a
-    for a in [
-        Atmosphere(
-            name="Clear day",
-            time=TimeOfDay.NOON,
-            season=Season.MID_SUMMER,
-            weather=Weather.CLEAR,
-            color_map=cmap("#aabbff", "#006aff", "#0069fc"),
-            haze_intensity=0.0,
-            post_process=lambda x, z, y, c: clamp_col(
-                (c[0] * 1.1, c[1] * 1.1, c[2] * 1.1)
-            ),
+# =============================================================================
+# Building Blocks for Dynamic Atmosphere Generation
+# =============================================================================
+
+# Sky color palettes by time of day
+TIME_SKY_PALETTES: dict[TimeOfDay, Colormap] = {
+    TimeOfDay.DAWN: cmap("#ecb8ec", "#F6FF8F", "#99CCDA", "#77AEBD"),
+    TimeOfDay.MORNING: cmap("#87CEEB", "#4A90D9", "#2E6BA6"),
+    TimeOfDay.NOON: cmap("#aabbff", "#006aff", "#0069fc"),
+    TimeOfDay.AFTERNOON: cmap("#87CEEB", "#5A9BD4", "#3A7BC0"),
+    TimeOfDay.DUSK: cmap("#FFD500", "#ff0800", "#480000"),
+    TimeOfDay.EVENING: cmap("#2E1A47", "#1A0A2E", "#0A0515"),
+    TimeOfDay.NIGHT: cmap("#06063A", "#000000"),
+    TimeOfDay.LATE_NIGHT: cmap("#020220", "#000000"),
+}
+
+# Weather overrides for sky color (None = use time-based palette)
+# Fog is ground-level, so sky colors still visible - fog adds haze, not sky override
+WEATHER_SKY_OVERRIDES: dict[Weather, Colormap | None] = {
+    Weather.CLEAR: None,
+    Weather.PARTLY_CLOUDY: None,
+    Weather.CLOUDY: cmap("#8a8a9a", "#6a6a7a"),
+    Weather.FOGGY: None,  # Fog adds haze but doesn't change sky color
+    Weather.RAINY: cmap("#8090a8", "#6a7a92"),
+    Weather.SNOWY: cmap("#eaeaea", "#ffffff"),
+    Weather.STORMY: cmap("#4a4a5a", "#2a2a3a"),
+}
+
+# Haze settings: (power, intensity) by weather
+HAZE_SETTINGS: dict[Weather, tuple[float, float]] = {
+    Weather.CLEAR: (2.0, 0.0),
+    Weather.PARTLY_CLOUDY: (2.0, 0.2),
+    Weather.CLOUDY: (1.5, 0.4),
+    Weather.FOGGY: (0.3, 0.9),
+    Weather.RAINY: (1.5, 0.5),
+    Weather.SNOWY: (2.0, 0.8),
+    Weather.STORMY: (1.0, 0.7),
+}
+
+# Brightness/tone adjustments by time: (brightness_mult, warmth_shift, blue_shift)
+TIME_ADJUSTMENTS: dict[TimeOfDay, tuple[float, int, int]] = {
+    TimeOfDay.DAWN: (0.9, 20, -10),
+    TimeOfDay.MORNING: (1.0, 5, 0),
+    TimeOfDay.NOON: (1.1, 0, 0),
+    TimeOfDay.AFTERNOON: (1.05, 5, -5),
+    TimeOfDay.DUSK: (0.5, 15, -15),
+    TimeOfDay.EVENING: (0.5, -10, 10),
+    TimeOfDay.NIGHT: (0.4, -20, 20),
+    TimeOfDay.LATE_NIGHT: (0.35, -25, 25),
+}
+
+# Weather brightness multipliers
+WEATHER_BRIGHTNESS: dict[Weather, float] = {
+    Weather.CLEAR: 1.0,
+    Weather.PARTLY_CLOUDY: 0.95,
+    Weather.CLOUDY: 0.85,
+    Weather.FOGGY: 1.0,
+    Weather.RAINY: 0.88,
+    Weather.SNOWY: 0.85,
+    Weather.STORMY: 0.7,
+}
+
+# Star visibility by time (0 = fully visible, 1 = invisible)
+STAR_VISIBILITY: dict[TimeOfDay, float] = {
+    TimeOfDay.DAWN: 0.7,
+    TimeOfDay.MORNING: 1.0,
+    TimeOfDay.NOON: 1.0,
+    TimeOfDay.AFTERNOON: 1.0,
+    TimeOfDay.DUSK: 0.5,
+    TimeOfDay.EVENING: 0.2,
+    TimeOfDay.NIGHT: 0.1,
+    TimeOfDay.LATE_NIGHT: 0.1,
+}
+
+# Precipitation settings by weather
+PRECIPITATION: dict[Weather, dict] = {
+    Weather.RAINY: {"char": "/", "color": rgb("#7a97ba"), "density": 0.12},
+    Weather.SNOWY: {"char": "❄*❅", "color": rgb("#979797"), "density": 0.2},
+    Weather.STORMY: {"char": "/|", "color": rgb("#5a7a9a"), "density": 0.18},
+}
+
+# Season adjustments: (brightness_mult, red_shift, green_shift, blue_shift)
+# Brightness multiplier applied to post-processing; color shifts tint the scene
+SEASON_ADJUSTMENTS: dict[Season, tuple[float, int, int, int]] = {
+    Season.EARLY_SPRING: (1.0, 0, 5, 5),  # Cool, fresh
+    Season.MID_SPRING: (1.0, 5, 5, 0),  # Neutral-warm
+    Season.LATE_SPRING: (1.0, 5, 5, -5),  # Warming
+    Season.EARLY_SUMMER: (1.0, 5, 0, -5),  # Warm
+    Season.MID_SUMMER: (1.0, 0, 0, 0),  # Neutral (baseline)
+    Season.LATE_SUMMER: (0.95, 10, 5, -5),  # Golden, slightly dim
+    Season.EARLY_AUTUMN: (0.9, 15, 5, -10),  # Warm, starting to darken
+    Season.MID_AUTUMN: (0.8, 20, -5, -15),  # Darker, strong red-orange
+    Season.LATE_AUTUMN: (0.3, 10, -15, -20),  # DRAMATIC: very dark, deep reds
+    Season.EARLY_WINTER: (0.85, 0, 0, 10),  # Cool blue, shorter days
+    Season.MID_WINTER: (0.8, -5, 0, 15),  # Cold blue, dark
+    Season.LATE_WINTER: (0.85, -5, 5, 10),  # Cold but brightening
+}
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+
+def _make_post_processor(
+    time: TimeOfDay, season: Season, weather: Weather
+) -> Callable[[float, float, float, RGB], RGB]:
+    """Create post-processor combining time, season, and weather effects."""
+    time_brightness, warmth, blue = TIME_ADJUSTMENTS[time]
+    weather_mult = WEATHER_BRIGHTNESS[weather]
+    season_mult, season_r, season_g, season_b = SEASON_ADJUSTMENTS[season]
+    final_brightness = time_brightness * weather_mult * season_mult
+
+    def processor(x: float, z: float, y: float, c: RGB) -> RGB:
+        return clamp_col(
+            (
+                int(c[0] * final_brightness + warmth + season_r),
+                int(c[1] * final_brightness + season_g),
+                int(c[2] * final_brightness + blue + season_b),
+            )
+        )
+
+    return processor
+
+
+def _make_star_details(visibility: float) -> list[Detail]:
+    """Create star details with given visibility (lower = more visible)."""
+    if visibility >= 1.0:
+        return []
+    return [
+        Detail(
+            name="Bright Stars",
+            chars=".",
+            density=0.01,
+            color_map=cmap("#ffffff"),
+            blend=visibility * 0.1,
         ),
-        Atmosphere(
-            name="Foggy day",
-            time=TimeOfDay.NOON,
-            season=Season.MID_SUMMER,
-            weather=Weather.FOGGY,
-            color_map=cmap("#b2b7ce", "#adc2df"),
-            haze_intensity=0.9,
-            haze_power=0.3,
-            post_process=lambda x, z, y, c: clamp_col(
-                (c[0] * 1.1, c[1] * 1.1, c[2] * 1.1)
-            ),
-        ),
-        RainyAtmosphere(
-            name="Rainy day",
-            time=TimeOfDay.NOON,
-            season=Season.MID_SUMMER,
-            weather=Weather.RAINY,
-            color_map=cmap("#8090a8", "#6a7a92"),
-            haze_intensity=0.5,
-            haze_power=1.5,
-            post_process=lambda x, z, y, c: clamp_col(
-                (c[0] * 0.85, c[1] * 0.88, c[2] * 1.05)
-            ),
-        ),
-        RainyAtmosphere(
-            name="Snowy day",
-            time=TimeOfDay.NOON,
-            season=Season.MID_SUMMER,
-            weather=Weather.SNOWY,
-            color_map=cmap("#eaeaea", "#ffffff"),
-            haze_intensity=0.8,
-            haze_power=2.0,
-            post_process=lambda x, z, y, c: clamp_col(
-                (c[0] * 0.85, c[1] * 0.85, c[2] * 0.9)
-            ),
-            rain_char="❄*❅",
-            rain_density=0.2,
-            rain_color=rgb("#979797"),
-        ),
-        Atmosphere(
-            name="Clear night",
-            time=TimeOfDay.NIGHT,
-            season=Season.MID_SUMMER,
-            weather=Weather.CLEAR,
-            color_map=cmap("#06063A", "#000000"),
-            details=[
-                Detail(
-                    name="Bright Stars",
-                    chars=".",
-                    density=0.01,
-                    color_map=cmap("#ffffff"),
-                    blend=0.1,
-                ),
-                Detail(
-                    name="Dim Stars",
-                    chars=".",
-                    density=0.05,
-                    color_map=cmap("#ffffff", "#cccccc"),
-                    blend=0.4,
-                ),
-            ],
-            haze_intensity=0.3,
-            post_process=lambda x, z, y, c: clamp_col(
-                (c[0] * 0.4 - 20, c[1] * 0.4 - 20, c[2] * 0.45 + 20)
-            ),
-        ),
-        Atmosphere(
-            name="Apricot dawn",
-            time=TimeOfDay.DAWN,
-            season=Season.MID_SUMMER,
-            weather=Weather.CLEAR,
-            color_map=cmap(
-                "#ecb8ec",
-                "#F6FF8F",
-                "#99CCDA",
-                "#77AEBD",
-            ),
-            details=[
-                Detail(
-                    name="Bright Stars",
-                    chars=".",
-                    density=0.01,
-                    color_map=cmap("#ffffff"),
-                    blend=0.2,
-                ),
-                Detail(
-                    name="Dim Stars",
-                    chars=".",
-                    density=0.05,
-                    color_map=cmap("#ffffff", "#cccccc"),
-                    blend=0.7,
-                ),
-            ],
-            haze_intensity=0.5,
-            post_process=lambda x, z, y, c: clamp_col(
-                (
-                    int(c[0] * 0.9 + 20),
-                    int(c[1] * 0.7 + 10),
-                    int(c[2] * 0.6),
-                )
-            ),
-        ),
-        Atmosphere(
-            name="Ominous sunset",
-            time=TimeOfDay.DUSK,
-            season=Season.LATE_AUTUMN,
-            weather=Weather.STORMY,
-            color_map=cmap(
-                "#FFD500",
-                "#ff0800",
-                # "#FF8800",
-                # "#FF8A7B",
-                # "#690000",
-                "#480000",
-            ),
-            details=[
-                Detail(
-                    name="Bright Stars",
-                    chars=".",
-                    density=0.01,
-                    color_map=cmap("#ffffff"),
-                    blend=0.0,
-                ),
-                Detail(
-                    name="Dim Stars",
-                    chars=".",
-                    density=0.05,
-                    color_map=cmap("#ffffff", "#cccccc"),
-                    blend=0.3,
-                ),
-            ],
-            haze_intensity=0.9,
-            post_process=lambda x, z, y, c: clamp_col(
-                (
-                    int(c[0] * 0.3),
-                    int(c[1] * 0.2 - 20),
-                    int(c[2] * 0.3 - 10),
-                )
-            ),
+        Detail(
+            name="Dim Stars",
+            chars=".",
+            density=0.05,
+            color_map=cmap("#ffffff", "#cccccc"),
+            blend=visibility * 0.4 + 0.3,
         ),
     ]
+
+
+# =============================================================================
+# Main Factory Function
+# =============================================================================
+
+
+def get_atmosphere(
+    time: TimeOfDay,
+    season: Season,
+    weather: Weather,
+    name: str | None = None,
+) -> Atmosphere:
+    """Create an atmosphere dynamically from time, season, and weather.
+
+    Composition rules:
+    - Sky color: weather override for heavy weather, else time-based palette
+    - Haze: determined by weather
+    - Post-processing: combines time brightness, weather dimming, season color shift
+    - Stars: visible at night/dusk/dawn when weather is clear/partly cloudy
+    - Precipitation: added for rainy/snowy/stormy weather
+    """
+    # Sky color: weather override or time-based
+    color_map = WEATHER_SKY_OVERRIDES.get(weather) or TIME_SKY_PALETTES[time]
+
+    # Haze from weather
+    haze_power, haze_intensity = HAZE_SETTINGS[weather]
+
+    # Post-processing from time + season + weather
+    post_process = _make_post_processor(time, season, weather)
+
+    # Stars for clear/partly cloudy at appropriate times
+    details: list[Detail] = []
+    if weather in (Weather.CLEAR, Weather.PARTLY_CLOUDY):
+        details = _make_star_details(STAR_VISIBILITY[time])
+
+    # Auto-generate name
+    if name is None:
+        name = f"{weather.name.replace('_', ' ').title()} {time.name.replace('_', ' ').lower()}"
+
+    # Use RainyAtmosphere for precipitation weather
+    precip = PRECIPITATION.get(weather)
+    if precip:
+        return RainyAtmosphere(
+            name=name,
+            time=time,
+            season=season,
+            weather=weather,
+            color_map=color_map,
+            haze_power=haze_power,
+            haze_intensity=haze_intensity,
+            post_process=post_process,
+            details=details,
+            rain_char=precip["char"],
+            rain_color=precip["color"],
+            rain_density=precip["density"],
+        )
+
+    return Atmosphere(
+        name=name,
+        time=time,
+        season=season,
+        weather=weather,
+        color_map=color_map,
+        haze_power=haze_power,
+        haze_intensity=haze_intensity,
+        post_process=post_process,
+        details=details,
+    )
+
+
+# =============================================================================
+# Presets and ATMOSPHERES Dictionary
+# =============================================================================
+
+# Named preset combinations (like biome PRESETS)
+ATMOSPHERE_PRESETS: dict[str, tuple[TimeOfDay, Season, Weather]] = {
+    "clear_day": (TimeOfDay.NOON, Season.MID_SUMMER, Weather.CLEAR),
+    "foggy_day": (TimeOfDay.NOON, Season.MID_SUMMER, Weather.FOGGY),
+    "rainy_day": (TimeOfDay.NOON, Season.MID_SUMMER, Weather.RAINY),
+    "snowy_day": (TimeOfDay.NOON, Season.MID_WINTER, Weather.SNOWY),
+    "clear_night": (TimeOfDay.NIGHT, Season.MID_SUMMER, Weather.CLEAR),
+    "apricot_dawn": (TimeOfDay.DAWN, Season.MID_SUMMER, Weather.CLEAR),
+    "ominous_sunset": (TimeOfDay.DUSK, Season.LATE_AUTUMN, Weather.CLEAR),
+}
+
+# Generate ATMOSPHERES dict from presets
+ATMOSPHERES = {
+    slug: get_atmosphere(*params, name=slug.replace("_", " ").title())
+    for slug, params in ATMOSPHERE_PRESETS.items()
 }

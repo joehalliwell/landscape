@@ -195,3 +195,89 @@ class TestToAtmosphereName:
             atmosphere=ATMOSPHERES["clear_day"],
         )
         assert config.to_atmosphere_name() == "clear_day"
+
+
+class TestFromRuntimeArgsAtmosphere:
+    def test_atmosphere_preset_fuzzy_match(self):
+        """Test that -a dawn fuzzy matches to apricot_dawn."""
+        config = GenerateParams.from_runtime_args(
+            seed=100,
+            biome_names=["ocean"],
+            atmosphere_name="dawn",
+        )
+        assert config.atmosphere.time == TimeOfDay.DAWN
+        assert config.atmosphere.season == Season.MID_SUMMER
+        assert config.atmosphere.weather == Weather.CLEAR
+
+    def test_atmosphere_preset_with_weather_override(self):
+        """Test that -a dawn --weather rain uses dawn's time/season but rainy weather."""
+        config = GenerateParams.from_runtime_args(
+            seed=100,
+            biome_names=["ocean"],
+            atmosphere_name="dawn",
+            weather="rain",
+        )
+        assert config.atmosphere.time == TimeOfDay.DAWN
+        assert config.atmosphere.season == Season.MID_SUMMER
+        assert config.atmosphere.weather == Weather.RAINY
+
+    def test_atmosphere_preset_with_time_override(self):
+        """Test that -a dawn --time night overrides the time."""
+        config = GenerateParams.from_runtime_args(
+            seed=100,
+            biome_names=["ocean"],
+            atmosphere_name="dawn",
+            time_of_day="night",
+        )
+        assert config.atmosphere.time == TimeOfDay.NIGHT
+        assert config.atmosphere.season == Season.MID_SUMMER
+        assert config.atmosphere.weather == Weather.CLEAR
+
+    def test_component_only_weather(self):
+        """Test that --weather alone picks random time/season."""
+        config = GenerateParams.from_runtime_args(
+            seed=100,
+            biome_names=["ocean"],
+            weather="stormy",
+        )
+        assert config.atmosphere.weather == Weather.STORMY
+
+    def test_component_only_time(self):
+        """Test that --time alone picks random season/weather."""
+        config = GenerateParams.from_runtime_args(
+            seed=100,
+            biome_names=["ocean"],
+            time_of_day="dusk",
+        )
+        assert config.atmosphere.time == TimeOfDay.DUSK
+
+
+def test_large_seed_clamped_in_from_runtime_args():
+    """Test that seeds exceeding MAX_SEED are clamped."""
+    config = GenerateParams.from_runtime_args(
+        seed=50000,
+        biome_names=["ocean"],
+        atmosphere_name="clear_day",
+    )
+    assert config.seed == GenerateParams.MAX_SEED
+
+
+def test_clamped_seed_round_trips():
+    """Test that clamped seeds round-trip correctly through encode/decode."""
+    config = GenerateParams.from_runtime_args(
+        seed=99999,
+        biome_names=["ocean"],
+        atmosphere_name="clear_day",
+    )
+    decoded = GenerateParams.decode(config.encode())
+    assert decoded.seed == config.seed == GenerateParams.MAX_SEED
+
+
+def test_valid_seed_unchanged():
+    """Test that seeds within range are not modified."""
+    config = GenerateParams.from_runtime_args(
+        seed=1000,
+        biome_names=["ocean"],
+        atmosphere_name="clear_day",
+    )
+    assert config.seed == 1000
