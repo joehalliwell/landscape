@@ -3,7 +3,7 @@
 
 from typing import Annotated
 
-from cyclopts import App, Parameter
+from cyclopts import App, Group, Parameter
 
 from landscape.atmospheres import ATMOSPHERES
 from landscape.biomes import BIOMES, PRESETS
@@ -16,7 +16,11 @@ from landscape.rendering import (
 from landscape.signature import GenerateParams
 from landscape.utils import clear_console, slugify
 
-app = App(help="Generated landscapes for the terminal.")
+app = App(help="Generate landscapes for the terminal.")
+
+GENERATION_GROUP = Group.create_ordered("Generation parameters")
+RENDER_GROUP = Group.create_ordered("Rendering parameters")
+DISPLAY_GROUP = Group.create_ordered("Display parameters")
 
 
 def _show_command(render_params, config: GenerateParams):
@@ -39,20 +43,35 @@ def _show_command(render_params, config: GenerateParams):
 
 @app.default
 def main(
+    signature: Annotated[
+        str | None,
+        Parameter(
+            name=["--signature", "-S"],
+            help="Regenerate from a signature code.",
+            show_default=False,
+            group=GENERATION_GROUP,
+        ),
+    ] = None,
+    *,
     preset_name: Annotated[
         str | None,
         Parameter(
             name=["--preset", "-p"],
             help=f"Specify preset. Options: {', '.join(PRESETS)}.",
+            group=GENERATION_GROUP,
         ),
     ] = None,
     seed: Annotated[
         int | None,
-        Parameter(name=["--seed", "-s"], help="Random seed.", show_default=False),
+        Parameter(
+            name=["--seed", "-s"],
+            help="Random seed.",
+            show_default=False,
+            group=GENERATION_GROUP,
+        ),
     ] = None,
-    *,
     render_params: Annotated[
-        RenderParams, Parameter(name="*", group="Render parameters")
+        RenderParams, Parameter(name="*", group=RENDER_GROUP)
     ] = RenderParams(),
     biome_names: Annotated[
         list[str],
@@ -61,6 +80,7 @@ def main(
             help=f"Specify biomes; may provide multiple; order is important.Options: {', '.join(BIOMES)}.",
             show_default=False,
             negative_iterable="",
+            group=GENERATION_GROUP,
         ),
     ] = [],
     atmosphere_name: Annotated[
@@ -68,23 +88,21 @@ def main(
         Parameter(
             name=["--atmosphere", "-a"],
             help=f"Specify atmosphere. Options: {', '.join(ATMOSPHERES)}.",
-        ),
-    ] = None,
-    signature: Annotated[
-        str | None,
-        Parameter(
-            name=["--signature", "-S"],
-            help="Regenerate from a signature code.",
-            show_default=False,
+            group=GENERATION_GROUP,
         ),
     ] = None,
     show_command: Annotated[
-        bool, Parameter(help="Show a canonical command to reproduce the scene.")
+        bool,
+        Parameter(
+            help="Show a canonical command to reproduce the scene.", group=DISPLAY_GROUP
+        ),
     ] = False,
     show_plan: Annotated[
-        bool, Parameter(help="Show a top-down plan of the biomes.")
+        bool, Parameter(help="Show a top-down plan of the biomes.", group=DISPLAY_GROUP)
     ] = False,
-    clear: Annotated[bool, Parameter(help="Clear console before displaying.")] = True,
+    clear: Annotated[
+        bool, Parameter(help="Clear console before displaying.", group=DISPLAY_GROUP)
+    ] = True,
 ):
     # STEP 1: Handle command line arguments
     try:
