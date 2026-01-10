@@ -1,12 +1,20 @@
 import random
 import shutil
 from dataclasses import dataclass
-from typing import Annotated, TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 from cyclopts import Parameter
 
 from landscape.biomes import TREE_CHARS, Biome
-from landscape.utils import RGB, clamp, lerp, lerp_color, noise_2d, rgb
+from landscape.utils import (
+    RGB,
+    clamp,
+    contrasting_text_color,
+    lerp,
+    lerp_color,
+    noise_2d,
+    rgb,
+)
 
 if TYPE_CHECKING:
     from landscape.generation import GeneratedLandscape
@@ -199,14 +207,15 @@ def render(
                 bg = atmosphere.filter(x, z, y, bg)
             rows[y][x] = (cell[0], fg, bg)
 
-    if signature:
+    if signature and screen_height > 1:
         # Overlay signature in bottom right
         sig_text = f" {signature} "
         for i, char in enumerate(sig_text):
             idx = width - len(sig_text) + i
             if 0 <= idx < width:
-                current = rows[0][idx]
-                rows[0][idx] = (char, rgb("#ffffff"), current[2])
+                current = rows[1][idx]
+                fg_color = contrasting_text_color(current[2])
+                rows[1][idx] = (char, fg_color, current[2])
 
     _render_rows(rows)
 

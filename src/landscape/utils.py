@@ -113,6 +113,14 @@ def lerp_color(
     )
 
 
+def contrasting_text_color(bg: RGB) -> RGB:
+    """Return black or white text color based on background luminance."""
+    # Calculate luminance (standard formula)
+    luminance = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2]
+    # Threshold of 128 is standard middle gray
+    return (0, 0, 0) if luminance > 128 else (255, 255, 255)
+
+
 @dataclass
 class Colormap:
     """A colormap running through a number of linear segments"""
