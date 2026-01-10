@@ -157,14 +157,14 @@ BIOMES = {
                     name="Flower",
                     chars="*",
                     frequency=400,
-                    density=0.08,
+                    density=0.05,
                     color_map=cmap("#c6009b", "#ff8c00"),
                 ),
                 Detail(
                     name="Flower2",
                     chars="+",
                     frequency=400,
-                    density=0.08,
+                    density=0.05,
                     color_map=cmap("#5600c6", "#ff8c00"),
                 ),
                 Detail(

@@ -169,7 +169,7 @@ def render(
             depth_fraction = 1.0 * z / depth
 
             cell = rows[y][x]
-            rows[y][x] = atmosphere.filter(x, y, ny, cell, depth_fraction, seed)
+            rows[y][x] = atmosphere.filter(x, y, z, ny, cell, depth_fraction, seed)
 
     if signature and screen_height > 1:
         # Overlay signature in bottom right
