@@ -80,7 +80,7 @@ def main(
     ] = None,
     show_command: Annotated[
         bool, Parameter(help="Show a canonical command to reproduce the scene.")
-    ] = True,
+    ] = False,
     show_plan: Annotated[
         bool, Parameter(help="Show a top-down plan of the biomes.")
     ] = False,
