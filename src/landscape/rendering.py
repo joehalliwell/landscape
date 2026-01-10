@@ -78,8 +78,6 @@ def render(
         for _ in range(screen_height)
     ]
 
-    haze = rgb("#aabbff")
-
     def get_color_at_point(x: int, z: int, y: int) -> tuple[str, RGB, RGB]:
         """Get blended color for a given point using biome map."""
         # Sky
@@ -157,21 +155,20 @@ def render(
 
     # Add haze and filter
     for y in range(screen_height):
+        ny = (y - screen_height * render_params.horizon) / (
+            screen_height * render_params.horizon
+        )
         for x in range(width):
             z = depth_buffer[y][x]
-            # if z > depth:
-            #     continue
-            hf = (0.2 * z / depth) ** 2
+            depth_fraction = 1.0 * z / depth
+
             cell = rows[y][x]
             fg = cell[1]
             bg = cell[2]
-            if hf > 0:
-                haze = lerp_color(rgb("#aabbff"), rgb("#64a5ff"), y / screen_height)
-                fg = lerp_color(fg, haze, hf)
-                bg = lerp_color(bg, haze, hf)
-            if atmosphere.filter:
-                fg = atmosphere.filter(x, z, y, fg)
-                bg = atmosphere.filter(x, z, y, bg)
+
+            fg = atmosphere.filter(x, z, ny, fg, depth_fraction)
+            bg = atmosphere.filter(x, z, ny, bg, depth_fraction)
+
             rows[y][x] = (cell[0], fg, bg)
 
     if signature and screen_height > 1:

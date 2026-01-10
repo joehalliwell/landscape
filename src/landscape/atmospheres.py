@@ -4,7 +4,7 @@ from functools import cached_property
 from typing import Callable
 
 from landscape.textures import Detail, Texture
-from landscape.utils import RGB, clamp_col, cmap, slugify
+from landscape.utils import RGB, clamp_col, cmap, lerp_color, slugify
 
 
 class TimeOfDay(IntEnum):
@@ -56,11 +56,31 @@ class Atmosphere(Texture):
     time: TimeOfDay = TimeOfDay.NOON
     season: Season = Season.MID_SUMMER
     weather: Weather = Weather.CLEAR
-    filter: Callable[[float, float, float, RGB], RGB] | None = None
+    haze_power: float = 2.0
+    haze_intensity: float = 0.5
+    post_process: Callable[[float, float, float, RGB], RGB] | None = None
 
     @cached_property
     def slug(self):
         return slugify(self.name)
+
+    def filter(
+        self,
+        x: float,
+        z: float,
+        ny: float,
+        c: RGB,
+        depth_fraction: float,
+    ) -> RGB:
+        # Apply haze
+        hf = (depth_fraction**self.haze_power) * self.haze_intensity
+        if hf > 0:
+            haze_color = self.color_map.val(ny)
+            c = lerp_color(c, haze_color, hf)
+        # Apply post-proc
+        if self.post_process:
+            c = self.post_process(x, z, ny, c)
+        return c
 
 
 ATMOSPHERES = {
@@ -72,7 +92,22 @@ ATMOSPHERES = {
             season=Season.MID_SUMMER,
             weather=Weather.CLEAR,
             color_map=cmap("#aabbff", "#006aff", "#0069fc"),
-            filter=lambda x, z, y, c: clamp_col((c[0] * 1.1, c[1] * 1.1, c[2] * 1.1)),
+            haze_intensity=0.0,
+            post_process=lambda x, z, y, c: clamp_col(
+                (c[0] * 1.1, c[1] * 1.1, c[2] * 1.1)
+            ),
+        ),
+        Atmosphere(
+            name="Foggy day",
+            time=TimeOfDay.NOON,
+            season=Season.MID_SUMMER,
+            weather=Weather.FOGGY,
+            color_map=cmap("#b2b7ce", "#adc2df"),
+            haze_intensity=0.9,
+            haze_power=0.3,
+            post_process=lambda x, z, y, c: clamp_col(
+                (c[0] * 1.1, c[1] * 1.1, c[2] * 1.1)
+            ),
         ),
         Atmosphere(
             name="Clear night",
@@ -96,7 +131,8 @@ ATMOSPHERES = {
                     blend=0.4,
                 ),
             ],
-            filter=lambda x, z, y, c: clamp_col(
+            haze_intensity=0.3,
+            post_process=lambda x, z, y, c: clamp_col(
                 (c[0] * 0.4 - 20, c[1] * 0.4 - 20, c[2] * 0.45 + 20)
             ),
         ),
@@ -127,7 +163,8 @@ ATMOSPHERES = {
                     blend=0.7,
                 ),
             ],
-            filter=lambda x, z, y, c: clamp_col(
+            haze_intensity=0.5,
+            post_process=lambda x, z, y, c: clamp_col(
                 (
                     int(c[0] * 0.9 + 20),
                     int(c[1] * 0.7 + 10),
@@ -164,7 +201,8 @@ ATMOSPHERES = {
                     blend=0.3,
                 ),
             ],
-            filter=lambda x, z, y, c: clamp_col(
+            haze_intensity=0.9,
+            post_process=lambda x, z, y, c: clamp_col(
                 (
                     int(c[0] * 0.3),
                     int(c[1] * 0.2 - 20),
@@ -174,7 +212,3 @@ ATMOSPHERES = {
         ),
     ]
 }
-
-
-def get_atmosphere(key: str):
-    return ATMOSPHERES[slugify(key)]
