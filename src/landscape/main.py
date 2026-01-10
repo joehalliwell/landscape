@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ASCII landscape generator - voxel-based with 2D projection."""
+"""Landscape: A landscape generator for the terminal."""
 
 import random
 from typing import Annotated
@@ -18,6 +18,7 @@ from landscape.rendering import (
     render_plan,
     render_with_depth,
 )
+from landscape.signature import GenerationConfig
 from landscape.utils import clear_console, rand_choice, slugify
 
 app = App(help="Generated landscapes for the terminal.")
@@ -58,7 +59,7 @@ def _fuzzy_match(input: str, options: list[str], seed: int) -> str:
     return rand_choice(matching, seed)
 
 
-def _get_biomes(biome_names: list[str], seed: int) -> list[Biome]:
+def _get_biomes(biome_names: list[str], seed: int) -> tuple[list[Biome], list[str]]:
     biome_names = [_fuzzy_match(name, list(BIOMES), seed) for name in biome_names]
 
     if len(biome_names) == 1:
@@ -67,7 +68,7 @@ def _get_biomes(biome_names: list[str], seed: int) -> list[Biome]:
         biome_names += [partner]
 
     biomes = [BIOMES[name] for name in biome_names]
-    return biomes
+    return biomes, biome_names
 
 
 def _get_atmosphere(atmosphere_name: str, seed: int):
@@ -132,6 +133,14 @@ def main(
             help=f"Specify atmosphere. Options: {', '.join(ATMOSPHERES)}.",
         ),
     ] = None,
+    signature: Annotated[
+        str | None,
+        Parameter(
+            name=["--signature", "-S"],
+            help="Regenerate from a signature code.",
+            show_default=False,
+        ),
+    ] = None,
     show_command: Annotated[
         bool, Parameter(help="Show a canonical command to reproduce the scene.")
     ] = True,
@@ -141,8 +150,15 @@ def main(
     clear: Annotated[bool, Parameter(help="Clear console before displaying.")] = True,
 ):
     # STEP 1: Handle command line arguments
+    _preset_name = None
     try:
-        if seed is None:
+        # If signature provided, decode and use those parameters
+        if signature:
+            config = GenerationConfig.decode(signature)
+            seed = config.seed
+            biome_names = config.to_biome_names()
+            atmosphere_name = config.to_atmosphere_name()
+        elif seed is None:
             seed = random.randint(0, 100000)
             # logger.info(f"Using random seed {seed}")
         assert seed is not None
@@ -151,20 +167,21 @@ def main(
         depth = max(width // 4, height)
 
         # If neither biomes nor preset specified, pick a random preset
-        _preset_name = (
-            _fuzzy_match(preset_name, list(PRESETS), seed)
-            if preset_name is not None
-            else rand_choice(list(PRESETS), seed)
-        )
-        _biome_names, _atmosphere_name = _get_preset(_preset_name, seed)
-        if biome_names == []:
-            biome_names = _biome_names
-        if atmosphere_name is None:
-            atmosphere_name = _atmosphere_name
+        if not signature:
+            _preset_name = (
+                _fuzzy_match(preset_name, list(PRESETS), seed)
+                if preset_name is not None
+                else rand_choice(list(PRESETS), seed)
+            )
+            _biome_names, _atmosphere_name = _get_preset(_preset_name, seed)
+            if biome_names == []:
+                biome_names = _biome_names
+            if atmosphere_name is None:
+                atmosphere_name = _atmosphere_name
 
         assert biome_names is not None
         assert atmosphere_name is not None
-        biomes = _get_biomes(biome_names, seed)
+        biomes, biome_keys = _get_biomes(biome_names, seed)
         atmosphere = _get_atmosphere(atmosphere_name, seed)
     except ValueError as e:
         print(f"ERROR: {e}")
@@ -182,9 +199,17 @@ def main(
         render_plan(biome_map, tree_map, seed)
 
     if show_command:
+        # Generate and display signature
+        config = GenerationConfig.from_params(
+            seed=seed,
+            biome_names=biome_keys,
+            atmosphere_name=slugify(atmosphere.name),
+        )
+        print(f"\033[2mSignature:\033[m {config.encode()}")
+
         _show_command(
             render_params,
-            _preset_name if preset_name else None,
+            _preset_name if (preset_name and not signature) else None,
             biomes,
             atmosphere,
             seed,
