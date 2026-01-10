@@ -174,12 +174,14 @@ def render(
     if signature and screen_height > 1:
         # Overlay signature in bottom right
         sig_text = f" {signature} "
+        bg = rows[1][width - len(sig_text)][2]
+        fg = contrasting_text_color(bg)
         for i, char in enumerate(sig_text):
             idx = width - len(sig_text) + i
             if 0 <= idx < width:
                 current = rows[1][idx]
-                fg_color = contrasting_text_color(current[2])
-                rows[1][idx] = (char, fg_color, current[2])
+                # fg_color = contrasting_text_color(current[2])
+                rows[1][idx] = (char, fg, lerp_color(bg, current[2], 0.5))
 
     _render_rows(rows)
 
