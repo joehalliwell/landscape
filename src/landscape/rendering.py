@@ -19,7 +19,13 @@ if TYPE_CHECKING:
 
 TERM_SIZE = shutil.get_terminal_size((120, 30))
 DEFAULT_WIDTH = TERM_SIZE.columns
-DEFAULT_HEIGHT = max(8, TERM_SIZE.lines - 5)  # Leave room for prompt/status
+DEFAULT_HEIGHT = min(
+    max(
+        8,
+        TERM_SIZE.lines - 5,  # Leave room for prompt/status
+    ),
+    DEFAULT_WIDTH // 8,
+)
 
 
 @dataclass
@@ -163,13 +169,7 @@ def render(
             depth_fraction = 1.0 * z / depth
 
             cell = rows[y][x]
-            fg = cell[1]
-            bg = cell[2]
-
-            fg = atmosphere.filter(x, z, ny, fg, depth_fraction)
-            bg = atmosphere.filter(x, z, ny, bg, depth_fraction)
-
-            rows[y][x] = (cell[0], fg, bg)
+            rows[y][x] = atmosphere.filter(x, y, ny, cell, depth_fraction, seed)
 
     if signature and screen_height > 1:
         # Overlay signature in bottom right

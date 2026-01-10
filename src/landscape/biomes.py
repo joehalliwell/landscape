@@ -153,7 +153,6 @@ BIOMES = {
             height_scale=0.3,
             base_height=0.4,
             details=[
-                tree_detail(0.85),
                 Detail(
                     name="Flower",
                     chars="*",
@@ -175,6 +174,7 @@ BIOMES = {
                     density=0.02,
                     color_map=cmap("#c67a00", "#fffb00"),
                 ),
+                tree_detail(0.85),
             ],
         ),
         Biome(
@@ -202,7 +202,6 @@ BIOMES = {
             height_scale=0.4,
             base_height=0.3,
             details=[
-                tree_detail(0.15),
                 Detail(
                     name="Grasses",
                     chars='"',
@@ -210,6 +209,7 @@ BIOMES = {
                     density=0.5,
                     color_map=cmap("#489c33", "#5F8506"),  # Hazy yellow-green
                 ),
+                tree_detail(0.15),
             ],
         ),
         Biome(
@@ -220,7 +220,6 @@ BIOMES = {
             height_scale=0.2,
             base_height=0.3,
             details=[
-                tree_detail(0.02),
                 Detail(
                     name="Catcus",
                     chars="Ψ",
@@ -228,6 +227,7 @@ BIOMES = {
                     density=0.05,
                     color_map=cmap("#055e00", "#08a000"),
                 ),
+                tree_detail(0.02),
             ],
         ),
         Biome(
