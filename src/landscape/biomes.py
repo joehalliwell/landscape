@@ -59,7 +59,7 @@ class Biome(Texture):
     base_height: float = 0.3  # Minimum terrain height (0-1)
     height_scale: float = 0.7  # Height to add
 
-    # Texture cponfig
+    # Texture config
     color_map: Colormap = field(default_factory=lambda: cmap("#000000", "#ffffff"))
 
     # Single character details to add

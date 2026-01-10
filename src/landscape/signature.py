@@ -18,7 +18,7 @@ from landscape.atmospheres import (
     TimeOfDay,
     Weather,
 )
-from landscape.biomes import BIOMES, Biome, BiomeCode, COMPLEMENTS, PRESETS
+from landscape.biomes import BIOMES, COMPLEMENTS, PRESETS, Biome, BiomeCode
 from landscape.utils import (
     base58_decode,
     base58_encode,
@@ -105,22 +105,13 @@ class GenerateParams:
     def decode(cls, signature: str) -> "GenerateParams":
         """Decode signature to GenerateParams."""
         if not signature.startswith(cls.PREFIX):
-            # Fallback for legacy 12-char hex signatures (optional but nice)
-            if len(signature) == 12:
-                try:
-                    int(signature, 16)
-                    # It's hex
-                    value = int(signature, 16)
-                    return cls._from_int_value(value)
-                except ValueError:
-                    pass
             raise ValueError(f"Signature must start with '{cls.PREFIX}'")
 
         encoded = signature[len(cls.PREFIX) :]
         try:
             value = base58_decode(encoded)
         except ValueError as e:
-            raise ValueError(f"Invalid signature format: {e}")
+            raise ValueError("Invalid signature format") from e
 
         return cls._from_int_value(value)
 
@@ -189,6 +180,7 @@ class GenerateParams:
         signature: str | None = None,
     ) -> "GenerateParams":
         """Resolve all runtime arguments into a config."""
+
         if signature:
             return cls.decode(signature)
 
