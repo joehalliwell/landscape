@@ -164,6 +164,9 @@ def clear_console():
     print("\033[2J", end="")  # Clear screen
 
 
+def find_shortcode_match(shortcode: str, options: tuple[str]): ...
+
+
 def fuzzy_match(input: str, options: list[str], seed: int) -> str:
     input = slugify(input)
     matching = [option for option in options if input in option]

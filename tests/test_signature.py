@@ -281,3 +281,190 @@ def test_valid_seed_unchanged():
         atmosphere_name="clear_day",
     )
     assert config.seed == 1000
+
+
+class TestCascadeOverride:
+    """Test the cascade override pattern for signature + CLI flags."""
+
+    def test_signature_only_returns_decoded(self):
+        """Signature alone should return decoded values unchanged."""
+        original = GenerateParams(
+            seed=1234,
+            biomes=(BIOMES["ocean"], BIOMES["forest"]),
+            atmosphere=ATMOSPHERES["clear_day"],
+        )
+        sig = original.encode()
+
+        config = GenerateParams.from_runtime_args(signature=sig)
+
+        assert config.seed == 1234
+        assert config.biomes == (BIOMES["ocean"], BIOMES["forest"])
+        assert config.atmosphere.time == TimeOfDay.NOON
+
+    def test_signature_with_seed_override(self):
+        """--seed should override signature seed."""
+        original = GenerateParams(
+            seed=1234,
+            biomes=(BIOMES["ocean"], BIOMES["forest"]),
+            atmosphere=ATMOSPHERES["clear_day"],
+        )
+        sig = original.encode()
+
+        config = GenerateParams.from_runtime_args(signature=sig, seed=9999)
+
+        assert config.seed == 9999
+        # Other values preserved
+        assert config.biomes == original.biomes
+        assert config.atmosphere.time == original.atmosphere.time
+
+    def test_signature_with_biome_override(self):
+        """--biome should override signature biomes."""
+        original = GenerateParams(
+            seed=1234,
+            biomes=(BIOMES["ocean"], BIOMES["mountains"]),
+            atmosphere=ATMOSPHERES["clear_day"],
+        )
+        sig = original.encode()
+
+        config = GenerateParams.from_runtime_args(signature=sig, biome_names=["forest"])
+
+        # Biome replaced, complement added
+        assert BIOMES["forest"] in config.biomes
+        assert len(config.biomes) == 2  # complement pairing still applies
+        # Seed preserved
+        assert config.seed == 1234
+
+    def test_signature_with_time_override(self):
+        """--time should override signature atmosphere time."""
+        original = GenerateParams(
+            seed=1234,
+            biomes=(BIOMES["ocean"], BIOMES["forest"]),
+            atmosphere=ATMOSPHERES["clear_day"],  # NOON
+        )
+        sig = original.encode()
+
+        config = GenerateParams.from_runtime_args(signature=sig, time_of_day="dusk")
+
+        assert config.atmosphere.time == TimeOfDay.DUSK
+        # Other atmosphere components preserved from signature
+        assert config.atmosphere.season == Season.MID_SUMMER
+        assert config.atmosphere.weather == Weather.CLEAR
+
+    def test_signature_with_weather_override(self):
+        """--weather should override signature atmosphere weather."""
+        original = GenerateParams(
+            seed=1234,
+            biomes=(BIOMES["ocean"], BIOMES["forest"]),
+            atmosphere=ATMOSPHERES["clear_day"],
+        )
+        sig = original.encode()
+
+        config = GenerateParams.from_runtime_args(signature=sig, weather="rainy")
+
+        assert config.atmosphere.weather == Weather.RAINY
+        # Other atmosphere components preserved
+        assert config.atmosphere.time == TimeOfDay.NOON
+        assert config.atmosphere.season == Season.MID_SUMMER
+
+    def test_signature_with_atmosphere_preset_override(self):
+        """--atmosphere should override all signature atmosphere components."""
+        original = GenerateParams(
+            seed=1234,
+            biomes=(BIOMES["ocean"], BIOMES["forest"]),
+            atmosphere=ATMOSPHERES["clear_day"],
+        )
+        sig = original.encode()
+
+        config = GenerateParams.from_runtime_args(
+            signature=sig, atmosphere_name="apricot_dawn"
+        )
+
+        # All components from apricot_dawn
+        assert config.atmosphere.time == TimeOfDay.DAWN
+        assert config.atmosphere.season == Season.MID_SUMMER
+        assert config.atmosphere.weather == Weather.CLEAR
+        # Biomes and seed preserved
+        assert config.biomes == original.biomes
+        assert config.seed == 1234
+
+    def test_signature_with_atmosphere_and_component_override(self):
+        """--atmosphere + --weather should layer correctly."""
+        original = GenerateParams(
+            seed=1234,
+            biomes=(BIOMES["ocean"], BIOMES["forest"]),
+            atmosphere=ATMOSPHERES["clear_day"],
+        )
+        sig = original.encode()
+
+        config = GenerateParams.from_runtime_args(
+            signature=sig,
+            atmosphere_name="apricot_dawn",  # DAWN, MID_SUMMER, CLEAR
+            weather="rainy",
+        )
+
+        # Time/season from preset, weather overridden
+        assert config.atmosphere.time == TimeOfDay.DAWN
+        assert config.atmosphere.season == Season.MID_SUMMER
+        assert config.atmosphere.weather == Weather.RAINY
+
+    def test_preset_overrides_signature_biomes(self):
+        """--preset should override signature biomes but not other fields."""
+        original = GenerateParams(
+            seed=1234,
+            biomes=(BIOMES["ocean"], BIOMES["ice"]),
+            atmosphere=ATMOSPHERES["clear_day"],
+        )
+        sig = original.encode()
+
+        config = GenerateParams.from_runtime_args(signature=sig, preset_name="coastal")
+
+        # Biomes from preset
+        assert config.to_biome_names() == ["ocean", "plains", "forest", "plains"]
+        # Seed preserved from signature
+        assert config.seed == 1234
+        # Atmosphere preserved from signature
+        assert config.atmosphere.time == TimeOfDay.NOON
+
+    def test_cli_biomes_override_preset_and_signature(self):
+        """--biome should override both signature and preset biomes."""
+        original = GenerateParams(
+            seed=1234,
+            biomes=(BIOMES["ocean"], BIOMES["ice"]),
+            atmosphere=ATMOSPHERES["clear_day"],
+        )
+        sig = original.encode()
+
+        config = GenerateParams.from_runtime_args(
+            signature=sig,
+            preset_name="coastal",
+            biome_names=["desert", "mountains"],
+        )
+
+        # CLI biomes win
+        assert config.to_biome_names() == ["desert", "mountains"]
+        # Seed preserved
+        assert config.seed == 1234
+
+    def test_multiple_overrides(self):
+        """Multiple CLI flags should each override their respective components."""
+        original = GenerateParams(
+            seed=1234,
+            biomes=(BIOMES["ocean"], BIOMES["ice"]),
+            atmosphere=ATMOSPHERES["clear_day"],
+        )
+        sig = original.encode()
+
+        config = GenerateParams.from_runtime_args(
+            signature=sig,
+            seed=5678,
+            biome_names=["forest"],
+            time_of_day="dusk",
+            weather="foggy",
+        )
+
+        assert config.seed == 5678
+        assert BIOMES["forest"] in config.biomes
+        assert config.atmosphere.time == TimeOfDay.DUSK
+        assert config.atmosphere.weather == Weather.FOGGY
+        # Season preserved from signature
+        assert config.atmosphere.season == Season.MID_SUMMER

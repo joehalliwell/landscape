@@ -201,61 +201,134 @@ class GenerateParams:
         weather: str | None = None,
         signature: str | None = None,
     ) -> "GenerateParams":
-        """Resolve all runtime arguments into a config."""
+        """Resolve all runtime arguments into a config.
+
+        Implements a cascade where broader options provide base values and
+        narrower options can override specific fields:
+
+        Precedence (later overrides earlier):
+        1. Signature (broadest) - provides base seed, biomes, atmosphere
+        2. Preset - overrides biomes only
+        3. Individual flags (narrowest):
+           - --seed overrides seed
+           - --biome overrides biomes
+           - --atmosphere overrides all atmosphere components
+           - --time, --season, --weather override individual components
+        """
+        # === LAYER 0: Initialize base values from signature ===
+        base_seed: int | None = None
+        base_biome_names: list[str] | None = None
+        base_time: TimeOfDay | None = None
+        base_season: Season | None = None
+        base_weather: Weather | None = None
 
         if signature:
-            return cls.decode(signature)
+            decoded = cls.decode(signature)
+            base_seed = decoded.seed
+            base_biome_names = [BIOME_CODE_TO_NAME[b.code] for b in decoded.biomes]
+            base_time = decoded.atmosphere.time
+            base_season = decoded.atmosphere.season
+            base_weather = decoded.atmosphere.weather
 
-        if seed is None:
-            seed = random.randint(0, cls.MAX_SEED)
+        # === LAYER 1: Seed resolution (CLI > signature > random) ===
+        if seed is not None:
+            final_seed = min(seed, cls.MAX_SEED)
+        elif base_seed is not None:
+            final_seed = base_seed
         else:
-            seed = min(seed, cls.MAX_SEED)
+            final_seed = random.randint(0, cls.MAX_SEED)
 
-        # If neither biomes nor preset specified, pick a random preset
-        if not biome_names:
-            preset_name = (
-                fuzzy_match(preset_name, list(PRESETS), seed)
-                if preset_name is not None
-                else rand_choice(list(PRESETS), seed)
-            )
+        # === LAYER 2: Biome resolution (CLI > preset > signature > random) ===
+        use_random_atmosphere = False
 
-        if preset_name and not biome_names:
-            biome_names = PRESETS[preset_name]
-            if atmosphere_name is None and not any([time_of_day, season, weather]):
-                atmosphere_name = rand_choice(list(ATMOSPHERES), seed)
+        if biome_names:
+            # CLI biomes override everything
+            resolved_biome_names = [
+                fuzzy_match(name, list(BIOMES), final_seed) for name in biome_names
+            ]
+        elif preset_name is not None:
+            # Preset overrides signature biomes
+            preset_name = fuzzy_match(preset_name, list(PRESETS), final_seed)
+            resolved_biome_names = list(PRESETS[preset_name])
+            # Random atmosphere only if using a preset with no other atmosphere args
+            if (
+                base_time is None
+                and atmosphere_name is None
+                and not any([time_of_day, season, weather])
+            ):
+                use_random_atmosphere = True
+        elif base_biome_names is not None:
+            # Use signature biomes
+            resolved_biome_names = base_biome_names
+        else:
+            # Random preset
+            preset_name = rand_choice(list(PRESETS), final_seed)
+            resolved_biome_names = list(PRESETS[preset_name])
+            use_random_atmosphere = True
 
-        # Resolve biome names
-        biome_names = [fuzzy_match(name, list(BIOMES), seed) for name in biome_names]
+        # Complement pairing still applies for single biome
+        if len(resolved_biome_names) == 1:
+            partner = rand_choice(COMPLEMENTS[resolved_biome_names[0]], final_seed)
+            resolved_biome_names.append(partner)
 
-        if len(biome_names) == 1:
-            # Single biome specified - pair with a complementary one
-            partner = rand_choice(COMPLEMENTS[biome_names[0]], seed)
-            biome_names.append(partner)
+        # === LAYER 3: Atmosphere resolution ===
+        # Priority: CLI component > CLI preset > signature > random
+        resolved_time = base_time
+        resolved_season = base_season
+        resolved_weather = base_weather
 
-        # Resolve atmosphere - start from preset if specified, then override components
+        # Atmosphere preset overrides signature values
         if atmosphere_name is not None:
-            atmosphere_name = fuzzy_match(atmosphere_name, list(ATMOSPHERES), seed)
-            base_time, base_season, base_weather = ATMOSPHERE_PRESETS[atmosphere_name]
-        else:
-            base_time, base_season, base_weather = None, None, None
-
-        # If any components specified (or we have a preset base), use component system
-        if any([time_of_day, season, weather, atmosphere_name]):
-            atmosphere = _resolve_atmosphere_from_args(
-                time_of_day
-                or (base_time.name.lower() if base_time is not None else None),
-                season
-                or (base_season.name.lower() if base_season is not None else None),
-                weather
-                or (base_weather.name.lower() if base_weather is not None else None),
-                seed,
+            atmosphere_name = fuzzy_match(
+                atmosphere_name, list(ATMOSPHERES), final_seed
             )
-        else:
-            atmosphere_name = rand_choice(list(ATMOSPHERES), seed)
-            atmosphere = ATMOSPHERES[atmosphere_name]
+            preset_t, preset_s, preset_w = ATMOSPHERE_PRESETS[atmosphere_name]
+            resolved_time, resolved_season, resolved_weather = (
+                preset_t,
+                preset_s,
+                preset_w,
+            )
 
-        biomes = tuple(BIOMES[name] for name in biome_names)
-        return cls(seed=seed, biomes=biomes, atmosphere=atmosphere)
+        # Apply CLI component overrides (fuzzy match strings to enums)
+        time_options = {t.name.lower(): t for t in TimeOfDay}
+        season_options = {s.name.lower(): s for s in Season}
+        weather_options = {w.name.lower(): w for w in Weather}
+
+        if time_of_day is not None:
+            resolved_time = time_options[
+                fuzzy_match(time_of_day, list(time_options), final_seed)
+            ]
+        if season is not None:
+            resolved_season = season_options[
+                fuzzy_match(season, list(season_options), final_seed)
+            ]
+        if weather is not None:
+            resolved_weather = weather_options[
+                fuzzy_match(weather, list(weather_options), final_seed)
+            ]
+
+        # Fill in any remaining None values with random choices
+        if resolved_time is None:
+            resolved_time = rand_choice(list(TimeOfDay), final_seed)
+        if resolved_season is None:
+            resolved_season = rand_choice(list(Season), final_seed + 1)
+        if resolved_weather is None:
+            resolved_weather = rand_choice(list(Weather), final_seed + 2)
+
+        if use_random_atmosphere and not any(
+            [time_of_day, season, weather, atmosphere_name, base_time]
+        ):
+            # Fully random atmosphere from presets (no signature, no CLI args)
+            atmo_name = rand_choice(list(ATMOSPHERES), final_seed)
+            atmosphere = ATMOSPHERES[atmo_name]
+        else:
+            # Resolve atmosphere from components
+            atmosphere = _resolve_atmosphere(
+                resolved_time, resolved_season, resolved_weather
+            )
+
+        biomes = tuple(BIOMES[name] for name in resolved_biome_names)
+        return cls(seed=final_seed, biomes=biomes, atmosphere=atmosphere)
 
     def to_atmosphere_name(self) -> str:
         """Get the atmosphere name."""
