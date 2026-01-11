@@ -24,7 +24,7 @@ from landscape.biomes import BIOMES, COMPLEMENTS, PRESETS, Biome, BiomeCode
 from landscape.utils import (
     base58_decode,
     base58_encode,
-    fuzzy_match,
+    find_shortcode_match,
     rand_choice,
     slugify,
 )
@@ -57,24 +57,24 @@ def _resolve_atmosphere_from_args(
     seed: int,
 ) -> Atmosphere:
     """Resolve atmosphere from string arguments, using defaults for unspecified."""
-    # Build lookup dicts for fuzzy matching
+    # Build lookup dicts for shortcode matching
     time_options = {t.name.lower(): t for t in TimeOfDay}
     season_options = {s.name.lower(): s for s in Season}
     weather_options = {w.name.lower(): w for w in Weather}
 
     # Resolve each component, defaulting to random if not specified
     if time_of_day is not None:
-        time = time_options[fuzzy_match(time_of_day, list(time_options), seed)]
+        time = time_options[find_shortcode_match(time_of_day, list(time_options))]
     else:
         time = rand_choice(list(TimeOfDay), seed)
 
     if season is not None:
-        ssn = season_options[fuzzy_match(season, list(season_options), seed)]
+        ssn = season_options[find_shortcode_match(season, list(season_options))]
     else:
         ssn = rand_choice(list(Season), seed + 1)
 
     if weather is not None:
-        wthr = weather_options[fuzzy_match(weather, list(weather_options), seed)]
+        wthr = weather_options[find_shortcode_match(weather, list(weather_options))]
     else:
         wthr = rand_choice(list(Weather), seed + 2)
 
@@ -244,11 +244,11 @@ class GenerateParams:
         if biome_names:
             # CLI biomes override everything
             resolved_biome_names = [
-                fuzzy_match(name, list(BIOMES), final_seed) for name in biome_names
+                find_shortcode_match(name, list(BIOMES)) for name in biome_names
             ]
         elif preset_name is not None:
             # Preset overrides signature biomes
-            preset_name = fuzzy_match(preset_name, list(PRESETS), final_seed)
+            preset_name = find_shortcode_match(preset_name, list(PRESETS))
             resolved_biome_names = list(PRESETS[preset_name])
             # Random atmosphere only if using a preset with no other atmosphere args
             if (
@@ -279,9 +279,7 @@ class GenerateParams:
 
         # Atmosphere preset overrides signature values
         if atmosphere_name is not None:
-            atmosphere_name = fuzzy_match(
-                atmosphere_name, list(ATMOSPHERES), final_seed
-            )
+            atmosphere_name = find_shortcode_match(atmosphere_name, list(ATMOSPHERES))
             preset_t, preset_s, preset_w = ATMOSPHERE_PRESETS[atmosphere_name]
             resolved_time, resolved_season, resolved_weather = (
                 preset_t,
@@ -289,22 +287,22 @@ class GenerateParams:
                 preset_w,
             )
 
-        # Apply CLI component overrides (fuzzy match strings to enums)
+        # Apply CLI component overrides (shortcode match strings to enums)
         time_options = {t.name.lower(): t for t in TimeOfDay}
         season_options = {s.name.lower(): s for s in Season}
         weather_options = {w.name.lower(): w for w in Weather}
 
         if time_of_day is not None:
             resolved_time = time_options[
-                fuzzy_match(time_of_day, list(time_options), final_seed)
+                find_shortcode_match(time_of_day, list(time_options))
             ]
         if season is not None:
             resolved_season = season_options[
-                fuzzy_match(season, list(season_options), final_seed)
+                find_shortcode_match(season, list(season_options))
             ]
         if weather is not None:
             resolved_weather = weather_options[
-                fuzzy_match(weather, list(weather_options), final_seed)
+                find_shortcode_match(weather, list(weather_options))
             ]
 
         # Fill in any remaining None values with random choices

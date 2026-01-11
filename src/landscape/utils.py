@@ -1,7 +1,8 @@
 import math
+import re
 from dataclasses import dataclass
 from functools import cache
-from typing import Any, TypeAlias
+from typing import Any, Sequence, TypeAlias
 
 RGB: TypeAlias = tuple[int, int, int]
 Cell: TypeAlias = tuple[str, RGB, RGB]
@@ -164,17 +165,17 @@ def clear_console():
     print("\033[2J", end="")  # Clear screen
 
 
-def find_shortcode_match(shortcode: str, options: tuple[str]): ...
-
-
-def fuzzy_match(input: str, options: list[str], seed: int) -> str:
-    input = slugify(input)
-    matching = [option for option in options if input in option]
-    if len(matching) == 0:
-        raise ValueError(
-            f"Could not find option matching '{input}' in: {', '.join(options)}"
-        )
-    return rand_choice(matching, seed)
+def find_shortcode_match(shortcode: str, options: Sequence[str]) -> str:
+    """
+    Find the best matching among options for the provided shortcode. Shortcodes
+    try to approximate human abbreviations that (in reality) relate to
+    morphemes.
+    """
+    sre = re.compile("(^|[ _-])" + "(.*)".join(list(shortcode)), flags=re.IGNORECASE)
+    candidates = [option for option in options if sre.search(option)]
+    if len(candidates) == 0:
+        raise ValueError(f"Could not match '{shortcode}' in: {options}")
+    return min((c for c in candidates), key=len)
 
 
 BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"

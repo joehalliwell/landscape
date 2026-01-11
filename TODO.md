@@ -1,5 +1,7 @@
 # TODOs
 
+- CYCLOPTS: Split out configuration into relevant modules and leverage cyclopts
+  parsing and testing more effectively
 - BEACH: Add beach i.e. special behaviours for pairs of biomes?
 - NOON: Factor out time of day
 - SEASON: Factor out seasons
