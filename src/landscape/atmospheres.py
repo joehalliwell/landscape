@@ -172,7 +172,7 @@ HAZE_SETTINGS: dict[Weather, tuple[float, float]] = {
     Weather.PARTLY_CLOUDY: (2.0, 0.2),
     Weather.CLOUDY: (1.5, 0.4),
     Weather.FOGGY: (0.3, 0.9),
-    Weather.RAINY: (1.5, 0.5),
+    Weather.RAINY: (1.5, 0.2),
     Weather.SNOWY: (2.0, 0.8),
     Weather.STORMY: (1.0, 0.7),
 }
@@ -186,7 +186,7 @@ TIME_ADJUSTMENTS: dict[TimeOfDay, tuple[float, int, int]] = {
     TimeOfDay.DUSK: (0.5, 15, -15),
     TimeOfDay.EVENING: (0.5, -10, 10),
     TimeOfDay.NIGHT: (0.4, -20, 20),
-    TimeOfDay.LATE_NIGHT: (0.35, -25, 25),
+    TimeOfDay.LATE_NIGHT: (0.35, -10, 10),
 }
 
 # Weather brightness multipliers
@@ -214,7 +214,7 @@ STAR_VISIBILITY: dict[TimeOfDay, float] = {
 
 # Precipitation settings by weather
 PRECIPITATION: dict[Weather, dict] = {
-    Weather.RAINY: {"char": "/", "color": rgb("#7a97ba"), "density": 0.12},
+    Weather.RAINY: {"char": "/", "color": rgb("#7a97ba"), "density": 0.2},
     Weather.SNOWY: {"char": "❄*❅", "color": rgb("#979797"), "density": 0.2},
     Weather.STORMY: {"char": "/|", "color": rgb("#5a7a9a"), "density": 0.18},
 }
