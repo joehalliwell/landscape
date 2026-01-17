@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Landscape: A landscape generator for the terminal."""
 
-from typing import Annotated
+from enum import Enum
+from typing import Annotated, get_args
 
-from cyclopts import App, Group, Parameter
+from cyclopts import App, Group, Parameter, Token
 
 from landscape.atmospheres import (
     ATMOSPHERE_PRESETS,
@@ -19,9 +20,10 @@ from landscape.rendering import (
     render_plan,
 )
 from landscape.signature import GenerateParams
-from landscape.utils import clear_console, slugify
+from landscape.utils import clear_console, find_shortcode_match, slugify
 
 app = App(help="Generate landscapes for the terminal.")
+app.register_install_completion_command()
 
 GENERATION_GROUP = Group.create_ordered("Generation parameters")
 RENDER_GROUP = Group.create_ordered("Rendering parameters")
@@ -44,6 +46,20 @@ def _show_command(render_params, config: GenerateParams):
         param("atmosphere", atmosphere_name),
     ]
     print(" ".join(bit for bit in bits if bit))
+
+
+@Parameter(n_tokens=1, accepts_keys=False)
+def convert_shortcode(target_type, tokens: tuple[Token]):
+    """Cyclopts coverter to handle single/multiple enum coversion"""
+    assert isinstance(tokens, tuple), "expected tuple of tokens"
+
+    # Extract the underlying Enum from the generic sequence type (e.g., list[MyEnum])
+    enum_type = get_args(target_type)[0]
+    assert issubclass(enum_type, Enum), "expected sequence of enums as target type"
+
+    options = [v.name for v in enum_type]
+    matches = [find_shortcode_match(token.value, options) for token in tokens]
+    return [enum_type[m] for m in matches]
 
 
 @app.default

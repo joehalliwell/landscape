@@ -1,10 +1,11 @@
 # TODOs
 
-- CYCLOPTS: Split out configuration into relevant modules and leverage cyclopts
-  parsing and testing more effectively
-- BEACH: Add beach i.e. special behaviours for pairs of biomes?
-- NOON: Factor out time of day
-- SEASON: Factor out seasons
-- WEATHER: Factor out rain, snow and fog
-- SHADOW: Do raycast shadows
-- PROJECT: Fix projects to be less hacky
+- Detail density should be screen space!
+- Leverage cyclotps to parse configuration e.g. using a custom convertor to
+  resolve short codes to enums
+- Rationalize code layout -- module/per function
+- Add beach i.e. special behaviours for pairs of biomes?
+- Fix projection to be less hacky
+- Add raycast shadows
+- Add reflections (!)
+- Merge Atmosphere and RainyAtmosphere into the swiss army knife
