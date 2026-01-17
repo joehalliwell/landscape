@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING, Annotated
 
 from cyclopts import Parameter
 
+from landscape.atmosphere.composition import get_filter_pipeline, get_sky_texture
+from landscape.atmosphere.filters import FilterContext
 from landscape.biomes import Biome
 from landscape.utils import (
     RGB,
@@ -15,7 +17,7 @@ from landscape.utils import (
 )
 
 if TYPE_CHECKING:
-    from landscape.generation import GeneratedLandscape
+    from landscape.generation import Scene
 
 TERM_SIZE = shutil.get_terminal_size((120, 30))
 DEFAULT_WIDTH = TERM_SIZE.columns
@@ -60,7 +62,7 @@ RESET = "\033[m"
 
 
 def render(
-    landscape: "GeneratedLandscape",
+    scene: "Scene",
     render_params: RenderParams,
     show_landscape=True,
     signature: str | None = None,
@@ -69,10 +71,13 @@ def render(
 
     oblique: how much to shift y per z unit (0 = front view, 1 = steep oblique)
     """
-    height_map = landscape.height_map
-    biome_map = landscape.biome_map
-    atmosphere = landscape.atmosphere
-    seed = landscape.seed
+    height_map = scene.height_map
+    biome_map = scene.biome_map
+    seed = scene.seed
+
+    # Build sky texture and filter pipeline from atmosphere
+    sky = get_sky_texture(scene.time, scene.season, scene.weather)
+    filters = get_filter_pipeline(scene.time, scene.season, scene.weather)
 
     depth_buffer = make_depth_buffer(render_params, height_map)
 
@@ -91,7 +96,7 @@ def render(
             ny = (y - screen_height * render_params.horizon) / (
                 screen_height * render_params.horizon
             )
-            return atmosphere.texture(x, ny, ny, seed)
+            return sky.texture(x, ny, ny, seed)
 
         biome1, biome2, blend = biome_map[x][z]
         nx = x / width
@@ -169,7 +174,15 @@ def render(
             depth_fraction = 1.0 * z / depth
 
             cell = rows[y][x]
-            rows[y][x] = atmosphere.filter(x, y, z, ny, cell, depth_fraction, seed)
+            ctx: FilterContext = {
+                "x": x,
+                "y": y,
+                "z": z,
+                "ny": ny,
+                "depth_fraction": depth_fraction,
+                "seed": seed,
+            }
+            rows[y][x] = filters.apply(cell, ctx)
 
     if signature and screen_height > 1:
         # Overlay signature in bottom right

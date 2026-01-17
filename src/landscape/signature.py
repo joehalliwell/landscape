@@ -11,83 +11,36 @@ Bit allocation:
 import random
 from dataclasses import dataclass
 
-from landscape.atmospheres import (
-    ATMOSPHERE_PRESETS,
-    ATMOSPHERES,
-    Atmosphere,
-    Season,
-    TimeOfDay,
-    Weather,
-    get_atmosphere,
-)
-from landscape.biomes import BIOMES, COMPLEMENTS, PRESETS, Biome, BiomeCode
+from landscape.atmosphere import AtmospherePreset, Season, TimeOfDay, Weather
+from landscape.biomes import BIOMES, COMPLEMENTS, Biome, BiomeCode, BiomePreset
 from landscape.utils import (
     base58_decode,
     base58_encode,
     find_shortcode_match,
     rand_choice,
-    slugify,
 )
 
 # Lookup tables for biome name <-> code conversion
 BIOME_NAME_TO_CODE = {name: biome.code for name, biome in BIOMES.items()}
 BIOME_CODE_TO_NAME = {biome.code: name for name, biome in BIOMES.items()}
 
-# Map atmosphere presets to (time, season, weather) components
-ATMO_TO_COMPONENTS = dict(ATMOSPHERE_PRESETS)
-COMPONENTS_TO_ATMO = {v: k for k, v in ATMO_TO_COMPONENTS.items()}
+# Lookup tables for preset enums by lowercase name
+ATMOSPHERE_PRESETS = {p.name.lower(): p for p in AtmospherePreset}
+BIOME_PRESETS = {p.name.lower(): p for p in BiomePreset}
 
-
-def _resolve_atmosphere(
-    time: TimeOfDay, season: Season, weather: Weather
-) -> Atmosphere:
-    """Find or create an Atmosphere for the given components."""
-    key = (time, season, weather)
-    if key in COMPONENTS_TO_ATMO:
-        return ATMOSPHERES[COMPONENTS_TO_ATMO[key]]
-
-    # Dynamically generate atmosphere for non-preset combinations
-    return get_atmosphere(time, season, weather)
-
-
-def _resolve_atmosphere_from_args(
-    time_of_day: str | None,
-    season: str | None,
-    weather: str | None,
-    seed: int,
-) -> Atmosphere:
-    """Resolve atmosphere from string arguments, using defaults for unspecified."""
-    # Build lookup dicts for shortcode matching
-    time_options = {t.name.lower(): t for t in TimeOfDay}
-    season_options = {s.name.lower(): s for s in Season}
-    weather_options = {w.name.lower(): w for w in Weather}
-
-    # Resolve each component, defaulting to random if not specified
-    if time_of_day is not None:
-        time = time_options[find_shortcode_match(time_of_day, list(time_options))]
-    else:
-        time = rand_choice(list(TimeOfDay), seed)
-
-    if season is not None:
-        ssn = season_options[find_shortcode_match(season, list(season_options))]
-    else:
-        ssn = rand_choice(list(Season), seed + 1)
-
-    if weather is not None:
-        wthr = weather_options[find_shortcode_match(weather, list(weather_options))]
-    else:
-        wthr = rand_choice(list(Weather), seed + 2)
-
-    return _resolve_atmosphere(time, ssn, wthr)
+# Reverse lookup: (time, season, weather) -> preset
+COMPONENTS_TO_PRESET = {p.value: p for p in AtmospherePreset}
 
 
 @dataclass
-class GenerateParams:
-    """Encapsulates all generation parameters with encode/decode capability."""
+class SceneConfig:
+    """Configuration parameters for scene generation."""
 
     seed: int
     biomes: tuple[Biome, ...]  # Up to 5 biomes, near to far
-    atmosphere: Atmosphere
+    time: TimeOfDay
+    season: Season
+    weather: Weather
 
     VERSION = 0
     MAX_SEED = (1 << 14) - 1  # 16383
@@ -106,9 +59,9 @@ class GenerateParams:
 
         value = (
             (self.VERSION << 44)
-            | (self.atmosphere.time << 41)
-            | (self.atmosphere.season << 37)
-            | (self.atmosphere.weather << 34)
+            | (self.time << 41)
+            | (self.season << 37)
+            | (self.weather << 34)
             | (slots[0] << 30)
             | (slots[1] << 26)
             | (slots[2] << 22)
@@ -121,8 +74,8 @@ class GenerateParams:
         return f"{self.PREFIX}{encoded}"
 
     @classmethod
-    def decode(cls, signature: str) -> "GenerateParams":
-        """Decode signature to GenerateParams."""
+    def decode(cls, signature: str) -> "SceneConfig":
+        """Decode signature to SceneConfig."""
         if not signature.startswith(cls.PREFIX):
             raise ValueError(f"Signature must start with '{cls.PREFIX}'")
 
@@ -135,8 +88,8 @@ class GenerateParams:
         return cls._from_int_value(value)
 
     @classmethod
-    def _from_int_value(cls, value: int) -> "GenerateParams":
-        """Internal helper to create params from the integer value."""
+    def _from_int_value(cls, value: int) -> "SceneConfig":
+        """Internal helper to create config from the integer value."""
         version = (value >> 44) & 0xF
         if version != cls.VERSION:
             raise ValueError(
@@ -160,17 +113,12 @@ class GenerateParams:
             if code != BiomeCode.EMPTY
         )
 
-        # Extract atmosphere components
-        time = TimeOfDay((value >> 41) & 0x7)
-        season = Season((value >> 37) & 0xF)
-        weather = Weather((value >> 34) & 0x7)
-
-        atmosphere = _resolve_atmosphere(time, season, weather)
-
         return cls(
             seed=(value & 0x3FFF),
             biomes=biomes,
-            atmosphere=atmosphere,
+            time=TimeOfDay((value >> 41) & 0x7),
+            season=Season((value >> 37) & 0xF),
+            weather=Weather((value >> 34) & 0x7),
         )
 
     @classmethod
@@ -179,28 +127,30 @@ class GenerateParams:
         seed: int,
         biome_names: list[str],
         atmosphere_name: str,
-    ) -> "GenerateParams":
+    ) -> "SceneConfig":
         """Create from resolved parameter names."""
         biomes = tuple(BIOMES[name] for name in biome_names)
-        atmosphere = ATMOSPHERES[slugify(atmosphere_name)]
+        preset = ATMOSPHERE_PRESETS[atmosphere_name]
         return cls(
             seed=seed,
             biomes=biomes,
-            atmosphere=atmosphere,
+            time=preset.time,
+            season=preset.season,
+            weather=preset.weather,
         )
 
     @classmethod
     def from_runtime_args(
         cls,
-        preset_name: str | None = None,
+        preset: BiomePreset | None = None,
         seed: int | None = None,
         biome_names: list[str] = [],
-        atmosphere_name: str | None = None,
-        time_of_day: str | None = None,
-        season: str | None = None,
-        weather: str | None = None,
+        atmosphere: AtmospherePreset | None = None,
+        time_of_day: TimeOfDay | None = None,
+        season: Season | None = None,
+        weather: Weather | None = None,
         signature: str | None = None,
-    ) -> "GenerateParams":
+    ) -> "SceneConfig":
         """Resolve all runtime arguments into a config.
 
         Implements a cascade where broader options provide base values and
@@ -226,9 +176,9 @@ class GenerateParams:
             decoded = cls.decode(signature)
             base_seed = decoded.seed
             base_biome_names = [BIOME_CODE_TO_NAME[b.code] for b in decoded.biomes]
-            base_time = decoded.atmosphere.time
-            base_season = decoded.atmosphere.season
-            base_weather = decoded.atmosphere.weather
+            base_time = decoded.time
+            base_season = decoded.season
+            base_weather = decoded.weather
 
         # === LAYER 1: Seed resolution (CLI > signature > random) ===
         if seed is not None:
@@ -246,14 +196,13 @@ class GenerateParams:
             resolved_biome_names = [
                 find_shortcode_match(name, list(BIOMES)) for name in biome_names
             ]
-        elif preset_name is not None:
+        elif preset is not None:
             # Preset overrides signature biomes
-            preset_name = find_shortcode_match(preset_name, list(PRESETS))
-            resolved_biome_names = list(PRESETS[preset_name])
+            resolved_biome_names = list(preset.biomes)
             # Random atmosphere only if using a preset with no other atmosphere args
             if (
                 base_time is None
-                and atmosphere_name is None
+                and atmosphere is None
                 and not any([time_of_day, season, weather])
             ):
                 use_random_atmosphere = True
@@ -262,8 +211,8 @@ class GenerateParams:
             resolved_biome_names = base_biome_names
         else:
             # Random preset
-            preset_name = rand_choice(list(PRESETS), final_seed)
-            resolved_biome_names = list(PRESETS[preset_name])
+            random_preset = rand_choice(list(BiomePreset), final_seed)
+            resolved_biome_names = list(random_preset.biomes)
             use_random_atmosphere = True
 
         # Complement pairing still applies for single biome
@@ -278,32 +227,18 @@ class GenerateParams:
         resolved_weather = base_weather
 
         # Atmosphere preset overrides signature values
-        if atmosphere_name is not None:
-            atmosphere_name = find_shortcode_match(atmosphere_name, list(ATMOSPHERES))
-            preset_t, preset_s, preset_w = ATMOSPHERE_PRESETS[atmosphere_name]
-            resolved_time, resolved_season, resolved_weather = (
-                preset_t,
-                preset_s,
-                preset_w,
-            )
+        if atmosphere is not None:
+            resolved_time = atmosphere.time
+            resolved_season = atmosphere.season
+            resolved_weather = atmosphere.weather
 
-        # Apply CLI component overrides (shortcode match strings to enums)
-        time_options = {t.name.lower(): t for t in TimeOfDay}
-        season_options = {s.name.lower(): s for s in Season}
-        weather_options = {w.name.lower(): w for w in Weather}
-
+        # Apply CLI component overrides (enums used directly)
         if time_of_day is not None:
-            resolved_time = time_options[
-                find_shortcode_match(time_of_day, list(time_options))
-            ]
+            resolved_time = time_of_day
         if season is not None:
-            resolved_season = season_options[
-                find_shortcode_match(season, list(season_options))
-            ]
+            resolved_season = season
         if weather is not None:
-            resolved_weather = weather_options[
-                find_shortcode_match(weather, list(weather_options))
-            ]
+            resolved_weather = weather
 
         # Fill in any remaining None values with random choices
         if resolved_time is None:
@@ -314,23 +249,29 @@ class GenerateParams:
             resolved_weather = rand_choice(list(Weather), final_seed + 2)
 
         if use_random_atmosphere and not any(
-            [time_of_day, season, weather, atmosphere_name, base_time]
+            [time_of_day, season, weather, atmosphere, base_time]
         ):
             # Fully random atmosphere from presets (no signature, no CLI args)
-            atmo_name = rand_choice(list(ATMOSPHERES), final_seed)
-            atmosphere = ATMOSPHERES[atmo_name]
-        else:
-            # Resolve atmosphere from components
-            atmosphere = _resolve_atmosphere(
-                resolved_time, resolved_season, resolved_weather
-            )
+            atmo_preset = rand_choice(list(AtmospherePreset), final_seed)
+            resolved_time = atmo_preset.time
+            resolved_season = atmo_preset.season
+            resolved_weather = atmo_preset.weather
 
         biomes = tuple(BIOMES[name] for name in resolved_biome_names)
-        return cls(seed=final_seed, biomes=biomes, atmosphere=atmosphere)
+        return cls(
+            seed=final_seed,
+            biomes=biomes,
+            time=resolved_time,
+            season=resolved_season,
+            weather=resolved_weather,
+        )
 
     def to_atmosphere_name(self) -> str:
-        """Get the atmosphere name."""
-        return slugify(self.atmosphere.name)
+        """Get the atmosphere name from components."""
+        key = (self.time, self.season, self.weather)
+        if key in COMPONENTS_TO_PRESET:
+            return COMPONENTS_TO_PRESET[key].name.lower()
+        return f"{self.weather.name.lower()}_{self.time.name.lower()}"
 
     def to_biome_names(self) -> list[str]:
         """Get the biome names."""

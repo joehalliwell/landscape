@@ -1,37 +1,39 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from landscape.atmospheres import Atmosphere
+from landscape.atmosphere import Season, TimeOfDay, Weather
 from landscape.biomes import Biome
 from landscape.utils import fractal_noise_2d, lerp
 
 if TYPE_CHECKING:
-    from landscape.signature import GenerateParams
+    from landscape.signature import SceneConfig
 
 
 @dataclass
-class GeneratedLandscape:
+class Scene:
     width: int
     depth: int
     biome_map: list[list[tuple[Biome, Biome, float]]]
     height_map: list[list[float]]
-    atmosphere: Atmosphere
+    time: TimeOfDay
+    season: Season
+    weather: Weather
     seed: int
 
 
-def generate(
-    config: "GenerateParams", width: int, depth: int, max_height: int
-) -> GeneratedLandscape:
+def generate(config: "SceneConfig", width: int, depth: int, max_height: int) -> Scene:
     """Generate a complete landscape from configuration."""
     biome_map = generate_biome_map(width, depth, list(config.biomes), config.seed)
     height_map = generate_height_map(width, depth, max_height, biome_map, config.seed)
 
-    return GeneratedLandscape(
+    return Scene(
         width=width,
         depth=depth,
         biome_map=biome_map,
         height_map=height_map,
-        atmosphere=config.atmosphere,
+        time=config.time,
+        season=config.season,
+        weather=config.weather,
         seed=config.seed,
     )
 

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from enum import IntEnum
+from enum import Enum, IntEnum
 from functools import cached_property
 
 from landscape.textures import Detail, Texture
@@ -243,18 +243,24 @@ BIOMES = {
 }
 
 
-# Predefined multi-biome combinations (near -> far)
-PRESETS = {
-    "coastal": ["ocean", "plains", "forest", "plains"],
-    "mountain_valley": ["plains", "forest", "mountains"],
-    "alpine_lake": ["ocean", "alpine", "mountains"],
-    "tropical": ["ocean", "jungle", "forest"],
-    "arctic": ["ocean", "ice", "ocean", "ice"],
-    "desert_oasis": ["desert", "mountains"],
-    "fjord": ["ocean", "mountains"],
-    "highlands": ["plains", "alpine", "mountains"],
-    "tropical_island": ["ocean", "jungle", "ocean"],
-}
+class BiomePreset(Enum):
+    """Predefined multi-biome combinations (near -> far)."""
+
+    COASTAL = ("ocean", "plains", "forest", "plains")
+    MOUNTAIN_VALLEY = ("plains", "forest", "mountains")
+    ALPINE_LAKE = ("ocean", "alpine", "mountains")
+    TROPICAL = ("ocean", "jungle", "forest")
+    ARCTIC = ("ocean", "ice", "ocean", "ice")
+    DESERT_OASIS = ("desert", "mountains")
+    FJORD = ("ocean", "mountains")
+    HIGHLANDS = ("plains", "alpine", "mountains")
+    TROPICAL_ISLAND = ("ocean", "jungle", "ocean")
+
+    @property
+    def biomes(self) -> tuple[str, ...]:
+        """Get the biome slugs for this preset."""
+        return self.value
+
 
 COMPLEMENTS = {
     "ocean": ["plains", "forest"],
