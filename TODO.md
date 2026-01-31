@@ -8,4 +8,3 @@
 - Fix projection to be less hacky
 - Add raycast shadows
 - Add reflections (!)
-- Merge Atmosphere and RainyAtmosphere into the swiss army knife

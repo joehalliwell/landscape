@@ -53,15 +53,17 @@ def _make_star_details(visibility: float) -> list[Detail]:
     return [
         Detail(
             name="Bright Stars",
-            chars=".",
-            density=0.01,
+            chars=".·˙",
+            density=0.05,
+            frequency=500,
             color_map=cmap("#ffffff"),
             blend=visibility * 0.1,
         ),
         Detail(
             name="Dim Stars",
-            chars=".",
-            density=0.05,
+            chars=".·˙",
+            density=0.1,
+            frequency=500,
             color_map=cmap("#ffffff", "#cccccc"),
             blend=visibility * 0.4 + 0.3,
         ),

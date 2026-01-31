@@ -28,7 +28,7 @@ class Texture:
         self, x: float, z: float, seed: int
     ) -> tuple[Detail, float] | None:
         for i, detail in enumerate(self.details):
-            p = noise_2d(x * 4 * detail.frequency, z * detail.frequency, seed * i)
+            p = noise_2d(x * 4 * detail.frequency, z * 4 * detail.frequency, seed * i)
 
             if p <= detail.density:
                 return detail, p
