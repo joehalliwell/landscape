@@ -1,11 +1,29 @@
 [project]
 name = "landscape"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A landscape generator for the terminal"
 readme = "README.md"
+license = "MIT"
 authors = [{ name = "Joe Halliwell", email = "joe.halliwell@gmail.com" }]
-requires-python = ">=3.13"
+requires-python = ">=3.10"
 dependencies = ["cyclopts>=4.4.3", "loguru>=0.7.3"]
+keywords = ["ascii", "landscape", "terminal", "generator", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Artistic Software",
+]
+
+[project.urls]
+Homepage = "https://github.com/joehalliwell/landscape"
+Repository = "https://github.com/joehalliwell/landscape"
+Issues = "https://github.com/joehalliwell/landscape/issues"
 
 [project.scripts]
 landscape = "landscape.main:app"
@@ -13,6 +31,16 @@ landscape = "landscape.main:app"
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/landscape/", "LICENSE", "README.md", "pyproject.toml"]
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
 
 [dependency-groups]
 dev = ["pytest>=9.0.2", "pytest-coverage>=0.0", "ruff>=0.14.10"]

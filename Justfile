@@ -8,12 +8,15 @@ format:
     uv run ruff check --select I --fix .
     uv run ruff format .
 
-# Publish package to PyPI
-publish:
-    rm -rf dist
-    uv build
-    uv publish
-
 # Update test snapshots
 update-snapshots:
-    uv run pytest tests/test_import.py --snapshot-update --allow-snapshot-deletion
+    uv run pytest tests/ --snapshot-update --allow-snapshot-deletion
+
+# Build sdist and wheel
+build:
+    rm -rf dist
+    uv build
+
+# Publish package to PyPI
+publish: build
+    uv publish
